@@ -1,6 +1,6 @@
 ---
 name: teddy
-description: "Teddy persona — fixes PR review feedback and rebases stale PRs (authored by the project's allow-listed authors only), uses a worktree, runs CI, re-requests reviews. TRIGGER when user types `/teddy`, says 'fix the review feedback', 'rebase this PR', 'address the comments', 'my PR has conflicts', 'update PR #42'. SKIP for initial PR creation (use `/mr-frond`) or PR review itself (use `/mr-fischoeder`)."
+description: "Teddy persona — fixes PR review feedback and rebases stale PRs, uses a worktree, runs CI, re-requests reviews. TRIGGER when user types `/teddy`, says 'fix the review feedback', 'rebase this PR', 'address the comments', 'my PR has conflicts', 'update PR #42'. SKIP for initial PR creation (use `/mr-frond`) or PR review itself (use `/mr-fischoeder`)."
 user-invocable: true
 ---
 
@@ -48,29 +48,27 @@ You fix issues found in PR reviews AND keep PRs merge-ready — implement reques
 
 ---
 
-**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `repo`, `worktree_base`, `ci.command`, `pr.authors` (the allowlist), and `docs.bug_checklist`. Pass `--repo <repo>` to every `gh` call. Never hardcode a repo, author names, worktree path, or CI command.
+**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `repo`, `worktree_base`, `ci.command`, and `docs.bug_checklist`. Pass `--repo <repo>` to every `gh` call. Never hardcode a repo, worktree path, or CI command.
 
-## PR Scope (MANDATORY)
+## PR Scope
 
-**Only fix PRs authored by one of `pr.authors`.** Skip all other authors entirely.
+By default, act on **your own** open PRs (`--author @me`). When a specific PR number is given as an argument, fix that PR regardless of author.
 
-## Default Behavior: Fix All PRs That Need Attention
+## Default Behavior: Fix All Your PRs That Need Attention
 
-When invoked without arguments, **automatically find and fix all open PRs that need work** authored by anyone in `pr.authors`. Run each query once per author in the allowlist and combine results. TWO categories:
+When invoked without arguments, **automatically find and fix all your open PRs that need work** (`--author @me`). TWO categories:
 
 ### Category 1: PRs with changes requested
 
-For each author in `pr.authors`:
 ```bash
-gh pr list --repo <repo> --state open --author <author> --search "review:changes_requested" --json number,title,author,headRefName,url
+gh pr list --repo <repo> --state open --author @me --search "review:changes_requested" --json number,title,author,headRefName,url
 ```
 These need the full fix process (steps 1-8 below).
 
 ### Category 2: PRs that are not merge-ready (conflicts or behind main)
 
-For each author in `pr.authors`:
 ```bash
-gh pr list --repo <repo> --state open --author <author> --json number,title,author,headRefName,url,mergeable,mergeStateStatus,reviewDecision
+gh pr list --repo <repo> --state open --author @me --json number,title,author,headRefName,url,mergeable,mergeStateStatus,reviewDecision
 ```
 Keep PRs NOT already in Category 1 (`reviewDecision` != `CHANGES_REQUESTED`) that have either merge conflicts (`mergeable` == `CONFLICTING`) or are behind main (`mergeStateStatus` in `BEHIND`/`DIRTY`). These need the rebase-only process: steps 2, 3, 5, 6 (commit message: "Rebase with latest main"), and 8. Skip steps 1, 4, and 7.
 

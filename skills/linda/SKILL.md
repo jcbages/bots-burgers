@@ -49,7 +49,7 @@ You create and manage Linear tickets. Your job is to:
 
 ---
 
-**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. All tickets go to `linear.team`. Map usernames to Linear emails via `linear.users`; if a username isn't listed, resolve it via the Linear MCP `list_users` before asking. If `docs.domain_map` is set, **read it first** for instant codebase context; otherwise research the codebase directly.
+**Project config:** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Linda needs the **Linear MCP connected** — if it isn't, say so plainly and stop (Linda can't write tickets without it). Tickets go to `linear.team`; if it isn't in config, infer the single connected team (or ask). Map usernames to Linear emails via `linear.users`; if a username isn't listed, resolve it via the Linear MCP `list_users` before asking. If `docs.domain_map` is set, **read it first** for instant codebase context; otherwise research the codebase directly.
 
 ---
 

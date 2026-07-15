@@ -1,6 +1,6 @@
 ---
 name: gene
-description: "Gene Belcher persona — fast commit to local `main` (no PR, no push) and log a lightweight Linear ticket. TRIGGER when user types `/gene`, says 'commit this', 'quick commit', 'log this to Linear', 'fast lane', or wants to ship session work without the full PR ceremony. SKIP when user asks for a PR (use `/mr-frond`) or wants to push — the user pushes manually."
+description: "Gene Belcher persona — fast commit to local `main` (no PR, no push) and, when Linear is set up, log a lightweight ticket. TRIGGER when user types `/gene`, says 'commit this', 'quick commit', 'log this to Linear', 'fast lane', or wants to ship session work without the full PR ceremony. SKIP when user asks for a PR (use `/mr-frond`) or wants to push — the user pushes manually."
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -43,7 +43,9 @@ You are the fast lane. No PRs, no branches, no ceremony. You commit to main loca
 
 ---
 
-**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `linear.team`, `linear.ticket_prefix`, `ci.test_command`, and `docs.bug_checklist` from it. Never hardcode a team, prefix, or test command. In this doc `<PREFIX>` means `linear.ticket_prefix` (e.g. `KER`).
+**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `ci.test_command` and `docs.bug_checklist` from it. Never hardcode a test command.
+
+**Linear is optional.** If the `linear:` block is absent or the Linear MCP isn't connected, skip the ticket step entirely and commit with a plain imperative message (no `[<PREFIX>-XX]` prefix). When Linear is available, `<PREFIX>` means `linear.ticket_prefix` (e.g. `KER`); never hardcode the team or prefix.
 
 ---
 
@@ -95,7 +97,9 @@ Present a quick summary of SESSION / MIXED / UNRELATED / un-splittable files. Ke
 
 The express train still has brakes.
 
-### 2. Find or Create a Linear Ticket (QUICK)
+### 2. Find or Create a Linear Ticket (QUICK — skip if Linear is unavailable)
+
+**If Linear is not configured or the MCP isn't connected, skip this whole step** and commit with a plain message.
 
 Check if a Linear ticket was mentioned during the session.
 
@@ -128,17 +132,17 @@ EOF
 ```
 
 **Commit message rules:**
-- Start with `[<PREFIX>-XX]` (the Linear ticket number)
+- Start with `[<PREFIX>-XX]` (the Linear ticket number) — omit the prefix entirely when Linear is unavailable
 - Imperative mood (Add, Fix, Update, Remove, Refactor)
 - One commit. Keep it simple. Split into 2-3 only if the work spans genuinely unrelated concerns.
 
-### 4. Confirm Ticket is Done
+### 4. Confirm Ticket is Done (skip if no ticket)
 
-The ticket should already be **Done** and assigned to the current Linear user — verify it. Do **not** push; the user pushes manually.
+If a ticket was logged, it should already be **Done** and assigned to the current Linear user — verify it. Do **not** push; the user pushes manually.
 
 ### 5. Report
 
-- Ticket: `<PREFIX>-XX` (with title)
+- Ticket: `<PREFIX>-XX` (with title) — or "none (Linear not set up)"
 - Commit: short SHA + message
 - Files: committed files
 - Status: Committed locally, ticket Done, push manually when ready

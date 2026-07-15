@@ -1,6 +1,6 @@
 ---
 name: mr-frond
-description: "Mr. Frond persona — packages the current session's uncommitted changes into a clean PR on a git worktree (audit, hunk-split mixed files, Linear ticket link, semantic commits, CI gate, push). TRIGGER when user types `/mr-frond`, says 'ship this', 'open a PR', 'package my changes', 'create a pull request', or 'make this a PR'. SKIP for quick commits to main (use `/gene`) or review-feedback fixes on existing PRs (use `/teddy`)."
+description: "Mr. Frond persona — packages the current session's uncommitted changes into a clean PR on a git worktree (audit, hunk-split mixed files, optional Linear ticket link, semantic commits, CI gate, push). TRIGGER when user types `/mr-frond`, says 'ship this', 'open a PR', 'package my changes', 'create a pull request', or 'make this a PR'. SKIP for quick commits to main (use `/gene`) or review-feedback fixes on existing PRs (use `/teddy`)."
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -42,7 +42,9 @@ You take the messy reality of a coding session — where multiple agents may be 
 
 ---
 
-**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `repo`, `worktree_base`, `linear.team`, `linear.ticket_prefix` (referred to below as `<PREFIX>`), `ci.command`, `pr.body_template`, and `docs.bug_checklist`. Never hardcode a repo slug, prefix, worktree path, or CI command. Pass `--repo <repo>` to every `gh` call.
+**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `repo`, `worktree_base`, `ci.command`, `pr.body_template`, and `docs.bug_checklist`. Never hardcode a repo slug, worktree path, or CI command. Pass `--repo <repo>` to every `gh` call.
+
+**Linear is optional.** `linear.team` and `linear.ticket_prefix` (referred to below as `<PREFIX>`) are used only when the `linear:` block is present **and** the Linear MCP is connected. If Linear is unavailable, skip the ticket step (step 4) and drop the `[<PREFIX>-XX]` prefix from the branch name, commits, and PR title — use a plain imperative description instead.
 
 ---
 
@@ -80,9 +82,11 @@ When a single file contains changes from BOTH the current session AND unrelated 
 
 Be paranoid here. A wrong hunk included or excluded can break things.
 
-### 4. Find or Create a Linear Ticket
+### 4. Find or Create a Linear Ticket (skip if Linear is unavailable)
 
-Check if a ticket was mentioned during the session. If not, search the Linear MCP for a matching ticket in `linear.team`, and ask the user to confirm. If none exists, invoke `/linda` to create one — a ticket is required because PR titles follow `[<PREFIX>-XX] description`.
+**If Linear is not configured or the MCP isn't connected, skip this step** — the PR uses a plain description with no ticket prefix.
+
+Otherwise: check if a ticket was mentioned during the session. If not, search the Linear MCP for a matching ticket in `linear.team`, and ask the user to confirm. If none exists, invoke `/linda` to create one, so PR titles can follow `[<PREFIX>-XX] description`.
 
 ### 5. Set Up Worktree and Stage Changes
 
@@ -94,7 +98,7 @@ mkdir -p <worktree_base>
 git worktree add <worktree_base>/<branch-name> origin/main -b <branch-name>
 ```
 
-Create from `origin/main` (not local `main`) to start from the latest remote state. **Branch naming:** `<prefix-lower>-XX-short-description` (e.g., `abc-42-webhook-retry-logic`).
+Create from `origin/main` (not local `main`) to start from the latest remote state. **Branch naming:** `<prefix-lower>-XX-short-description` (e.g., `abc-42-webhook-retry-logic`); with no ticket, use `short-description` alone.
 
 Surgically copy ONLY the session's changes into the worktree:
 - **Whole-session files / new files:** `cp <file> <worktree_base>/<branch-name>/<same-path>`
@@ -125,7 +129,7 @@ git add db/migrate/ && git commit -m "[<PREFIX>-XX] Add migration for new_featur
 git add app/models/ && git commit -m "[<PREFIX>-XX] Add model logic for new_feature"
 ```
 
-**Commit rules:** start with `[<PREFIX>-XX]`, imperative mood, each commit a single logical unit.
+**Commit rules:** start with `[<PREFIX>-XX]` (omit the prefix when Linear is unavailable), imperative mood, each commit a single logical unit.
 
 ### 8. Run CI
 
@@ -149,7 +153,7 @@ Build the PR body from `pr.body_template` if set, else the built-in `~/.claudita
 gh pr create --repo <repo> --head <branch-name> --title "[<PREFIX>-XX] Title matching the ticket" --body "<rendered body>"
 ```
 
-**PR title format:** `[<PREFIX>-XX] Short description` — must match the Linear ticket.
+**PR title format:** `[<PREFIX>-XX] Short description` — must match the Linear ticket; with no ticket, use `Short description` alone.
 
 ### 10. Clean Up
 
@@ -164,10 +168,10 @@ git worktree remove <worktree_base>/<branch-name>
 - [ ] All session changes identified and categorized (user-confirmed)
 - [ ] Mixed files handled surgically — only session hunks included
 - [ ] No unrelated changes leaked; no session changes dropped
-- [ ] Linear ticket linked (existing or newly created)
-- [ ] Branch named with ticket number
+- [ ] Linear ticket linked (existing or newly created) — or skipped if Linear unavailable
+- [ ] Branch named with ticket number (or plain description if no ticket)
 - [ ] Commits atomic and semantically organized
-- [ ] PR title follows `[<PREFIX>-XX] description`
+- [ ] PR title follows `[<PREFIX>-XX] description` (or plain description if no ticket)
 - [ ] CI passes in worktree
 - [ ] Worktree cleaned up
 

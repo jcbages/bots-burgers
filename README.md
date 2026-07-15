@@ -47,10 +47,13 @@ Run it once per config dir if you keep several (e.g. `~/.claude` and `~/.claudit
 
 Both point at the same `AGENTS.md`, so there is **one file to edit** and zero drift.
 
-`skills/`, `commands/`, and `settings.json` are Claude-specific — Codex has no
-equivalent skills system, so only the instructions layer is shared with it.
-`settings.json` is *generated* (not symlinked) because it embeds an absolute path
-to `shell/statusline.sh`; per-account settings can therefore diverge safely.
+`skills/` and `commands/` are Claude-specific — Codex has no equivalent skills
+system, so only the instructions layer is shared with it.
+
+`settings.json` is never symlinked or overwritten: it holds account-specific keys
+(model, permissions, theme, ...). `install.sh` **merges** only `statusLine` and the
+`Stop` auto-sync hook into your existing file via `jq`, leaving every other key
+untouched. The status line and hook point at absolute paths inside this repo.
 
 ## New machine
 

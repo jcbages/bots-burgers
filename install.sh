@@ -22,6 +22,8 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+command -v jq >/dev/null || { echo "error: jq is required (brew install jq)" >&2; exit 1; }
+
 CLAUDE_DIR=""
 CODEX_DIR="${HOME}/.codex"
 DO_CODEX=1
@@ -73,20 +75,21 @@ link() {
   echo "  link    $dest -> $src"
 }
 
-# Render settings.json (it embeds an absolute path, so it is generated, not linked).
-render_settings() {
+# Merge statusLine + the Stop auto-sync hook into the existing settings.json,
+# PRESERVING every other key (model, permissions, theme, ...). Creates a minimal
+# file if none exists. settings.json is account-specific, so it is never symlinked
+# or overwritten wholesale. Requires jq.
+merge_settings() {
   local dest="$1/settings.json"
-  local rendered
-  rendered="$(sed \
-    -e "s|__STATUSLINE__|$REPO_DIR/shell/statusline.sh|g" \
-    -e "s|__SYNC__|$REPO_DIR/shell/sync.sh|g" \
-    "$REPO_DIR/settings/settings.json")"
-  if [ -e "$dest" ] && [ ! -L "$dest" ] && [ "$rendered" != "$(cat "$dest")" ]; then
-    mv "$dest" "${dest}.bak.$(stamp)"
-    echo "  backup  $dest -> ${dest}.bak.*"
-  fi
-  printf '%s\n' "$rendered" > "$dest"
-  echo "  write   $dest"
+  local base="{}"
+  [ -f "$dest" ] && [ ! -L "$dest" ] && base="$(cat "$dest")"
+  printf '%s' "$base" | jq \
+    --arg sl "$REPO_DIR/shell/statusline.sh" \
+    --arg sync "$REPO_DIR/shell/sync.sh" \
+    '.statusLine = {type: "command", command: $sl}
+     | .hooks.Stop = [ { hooks: [ { type: "command", command: $sync } ] } ]' \
+    > "$dest.tmp" && mv "$dest.tmp" "$dest"
+  echo "  merge   $dest (statusLine + Stop hook; existing keys preserved)"
 }
 
 echo "Repo:        $REPO_DIR"
@@ -101,7 +104,7 @@ link "$REPO_DIR/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"   # canonical instructions
 link "$REPO_DIR/commands"  "$CLAUDE_DIR/commands"
 link "$REPO_DIR/skills"    "$CLAUDE_DIR/skills"
 link "$REPO_DIR/agents"    "$CLAUDE_DIR/agents"
-render_settings "$CLAUDE_DIR"
+merge_settings "$CLAUDE_DIR"
 
 if [ "$DO_CODEX" = 1 ]; then
   echo

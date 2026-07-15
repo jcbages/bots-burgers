@@ -35,6 +35,13 @@ I am learning French. Help me practice by following these rules in every convers
 
 ---
 
+# Git Workflow (applies to all projects)
+
+- **Always work directly on `main`** — commit to `main` by default, and when a branch's work is finished, merge it back into `main`.
+- Only create, switch to, or stay on a non-`main` branch when I **explicitly** ask for it. Absent an explicit instruction, assume `main`.
+
+---
+
 # Code Philosophy (applies to all projects)
 
 These are standing principles for every language and framework — apply them to every feature, bug fix, and refactor. A project's own `CLAUDE.md` may add specifics; this is the baseline.

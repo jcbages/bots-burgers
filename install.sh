@@ -22,7 +22,7 @@
 #       --no-codex         Do not touch Codex.
 #       --only LIST        Comma-separated components to install (default: all).
 #                          Valid: instructions, commands, skills, agents, settings, codex.
-#                          ('settings' also wires the statusline + auto-sync shell scripts.)
+#                          ('settings' also wires the statusline + Stop/SessionStart/PreToolUse hooks.)
 #   -y, --yes              Assume defaults, do not prompt.
 #   -h, --help             Show this help.
 #
@@ -128,10 +128,16 @@ link_into_dir() {
   done
 }
 
-# Merge statusLine + the Stop auto-sync hook into the existing settings.json,
-# PRESERVING every other key (model, permissions, theme, ...). Creates a minimal
-# file if none exists. settings.json is account-specific, so it is never symlinked
-# or overwritten wholesale. Requires jq.
+# Merge statusLine + our hooks into the existing settings.json, PRESERVING every
+# other key (model, permissions, theme, ...). Creates a minimal file if none exists.
+# settings.json is account-specific, so it is never symlinked or overwritten
+# wholesale. The hook scripts live in this repo and are referenced by absolute path
+# (like the statusline), so they are not symlinked. Requires jq.
+#
+# Hooks wired globally:
+#   Stop         -> shell/sync.sh                       (auto-commit config changes)
+#   SessionStart -> hooks/session_start_persona_pick.sh (pick a persona for the session)
+#   PreToolUse   -> hooks/require_persona.sh            (deny edits until a persona is invoked)
 merge_settings() {
   local dest="$1/settings.json"
   local base="{}"
@@ -139,10 +145,14 @@ merge_settings() {
   printf '%s' "$base" | jq \
     --arg sl "$REPO_DIR/shell/statusline.sh" \
     --arg sync "$REPO_DIR/shell/sync.sh" \
+    --arg pick "$REPO_DIR/hooks/session_start_persona_pick.sh" \
+    --arg persona "$REPO_DIR/hooks/require_persona.sh" \
     '.statusLine = {type: "command", command: $sl}
-     | .hooks.Stop = [ { hooks: [ { type: "command", command: $sync } ] } ]' \
+     | .hooks.Stop = [ { hooks: [ { type: "command", command: $sync } ] } ]
+     | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." } ] } ]
+     | .hooks.PreToolUse = [ { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] } ]' \
     > "$dest.tmp" && mv "$dest.tmp" "$dest"
-  echo "  merge   $dest (statusLine + Stop hook; existing keys preserved)"
+  echo "  merge   $dest (statusLine + Stop/SessionStart/PreToolUse hooks; existing keys preserved)"
 }
 
 echo "Repo:        $REPO_DIR"

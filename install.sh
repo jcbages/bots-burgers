@@ -5,16 +5,24 @@
 # It symlinks the shared files (instructions, skills, commands, agents) into each
 # tool's config directory and renders settings.json with the correct statusline path.
 #
+# Directory components (skills, commands, agents) are linked FILE BY FILE, so any
+# skills/commands you already have in the target dir are left untouched.
+#
 # Usage:
 #   ./install.sh                         # interactive: prompts for the Claude config dir
 #   ./install.sh -c ~/.claudita          # target a custom Claude config dir (CLAUDE_CONFIG_DIR)
 #   ./install.sh -c ~/.claude --no-codex # skip Codex
 #   ./install.sh -c ~/.claudita -y       # non-interactive, use given/default dirs
+#   ./install.sh --only skills           # install only the skills
+#   ./install.sh --only skills,commands  # install only skills + commands
 #
 # Flags:
 #   -c, --config-dir DIR   Claude config dir (default: ~/.claude). Matches CLAUDE_CONFIG_DIR.
 #       --codex-dir DIR    Codex config dir (default: ~/.codex).
 #       --no-codex         Do not touch Codex.
+#       --only LIST        Comma-separated components to install (default: all).
+#                          Valid: instructions, commands, skills, agents, settings, codex.
+#                          ('settings' also wires the statusline + auto-sync shell scripts.)
 #   -y, --yes              Assume defaults, do not prompt.
 #   -h, --help             Show this help.
 #
@@ -24,26 +32,52 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 command -v jq >/dev/null || { echo "error: jq is required (brew install jq)" >&2; exit 1; }
 
+ALL_COMPONENTS="instructions commands skills agents settings codex"
+
 CLAUDE_DIR=""
 CODEX_DIR="${HOME}/.codex"
 DO_CODEX=1
 ASSUME_YES=0
+ONLY=""
 
-usage() { sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     -c|--config-dir) CLAUDE_DIR="$2"; shift 2 ;;
     --codex-dir)     CODEX_DIR="$2"; shift 2 ;;
     --no-codex)      DO_CODEX=0; shift ;;
+    --only)          ONLY="$2"; shift 2 ;;
     -y|--yes)        ASSUME_YES=1; shift ;;
     -h|--help)       usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage; exit 1 ;;
   esac
 done
 
-# Prompt for the Claude config dir when not supplied and not running unattended.
-if [ -z "$CLAUDE_DIR" ]; then
+# Validate --only against the known component list.
+if [ -n "$ONLY" ]; then
+  for c in ${ONLY//,/ }; do
+    case " $ALL_COMPONENTS " in
+      *" $c "*) ;;
+      *) echo "error: unknown component '$c' (valid: $ALL_COMPONENTS)" >&2; exit 1 ;;
+    esac
+  done
+fi
+
+# True when component $1 was requested (everything is requested when --only is absent).
+want() {
+  [ -z "$ONLY" ] && return 0
+  case ",$ONLY," in *",$1,"*) return 0 ;; *) return 1 ;; esac
+}
+
+# Do we need the Claude config dir at all? (codex is the only non-Claude component.)
+NEED_CLAUDE=0
+for c in instructions commands skills agents settings; do
+  want "$c" && NEED_CLAUDE=1
+done
+
+# Prompt for the Claude config dir when needed, not supplied, and not unattended.
+if [ "$NEED_CLAUDE" = 1 ] && [ -z "$CLAUDE_DIR" ]; then
   default_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
   if [ "$ASSUME_YES" = 1 ]; then
     CLAUDE_DIR="$default_dir"
@@ -75,6 +109,25 @@ link() {
   echo "  link    $dest -> $src"
 }
 
+# Link the CONTENTS of $src_dir into $dest_dir, one entry at a time, leaving any
+# unrelated files already in $dest_dir untouched. Only same-named entries collide
+# (and those are backed up by link()).
+link_into_dir() {
+  local src_dir="$1" dest_dir="$2"
+  # An older install may have symlinked the whole dir; drop that so we link into a
+  # real directory rather than into the repo itself.
+  if [ -L "$dest_dir" ]; then
+    echo "  unlink  $dest_dir (was a whole-dir symlink)"
+    rm "$dest_dir"
+  fi
+  mkdir -p "$dest_dir"
+  local entry
+  for entry in "$src_dir"/*; do
+    [ -e "$entry" ] || continue   # nothing to link if the dir is empty
+    link "$entry" "$dest_dir/$(basename "$entry")"
+  done
+}
+
 # Merge statusLine + the Stop auto-sync hook into the existing settings.json,
 # PRESERVING every other key (model, permissions, theme, ...). Creates a minimal
 # file if none exists. settings.json is account-specific, so it is never symlinked
@@ -93,20 +146,25 @@ merge_settings() {
 }
 
 echo "Repo:        $REPO_DIR"
-echo "Claude dir:  $CLAUDE_DIR"
-[ "$DO_CODEX" = 1 ] && echo "Codex dir:   $CODEX_DIR" || echo "Codex:       skipped"
+[ "$NEED_CLAUDE" = 1 ] && echo "Claude dir:  $CLAUDE_DIR"
+if [ "$DO_CODEX" = 1 ] && want codex; then echo "Codex dir:   $CODEX_DIR"; else echo "Codex:       skipped"; fi
+[ -n "$ONLY" ] && echo "Only:        $ONLY"
 echo
 
-echo "==> Claude Code"
-mkdir -p "$CLAUDE_DIR"
-link "$REPO_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"   # one-liner: @AGENTS.md
-link "$REPO_DIR/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"   # canonical instructions
-link "$REPO_DIR/commands"  "$CLAUDE_DIR/commands"
-link "$REPO_DIR/skills"    "$CLAUDE_DIR/skills"
-link "$REPO_DIR/agents"    "$CLAUDE_DIR/agents"
-merge_settings "$CLAUDE_DIR"
+if [ "$NEED_CLAUDE" = 1 ]; then
+  echo "==> Claude Code"
+  mkdir -p "$CLAUDE_DIR"
+  if want instructions; then
+    link "$REPO_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"   # one-liner: @AGENTS.md
+    link "$REPO_DIR/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"   # canonical instructions
+  fi
+  want commands && link_into_dir "$REPO_DIR/commands" "$CLAUDE_DIR/commands"
+  want skills   && link_into_dir "$REPO_DIR/skills"   "$CLAUDE_DIR/skills"
+  want agents   && link_into_dir "$REPO_DIR/agents"   "$CLAUDE_DIR/agents"
+  want settings && merge_settings "$CLAUDE_DIR"
+fi
 
-if [ "$DO_CODEX" = 1 ]; then
+if [ "$DO_CODEX" = 1 ] && want codex; then
   echo
   echo "==> Codex (instructions only; skills/settings are Claude-specific)"
   mkdir -p "$CODEX_DIR"

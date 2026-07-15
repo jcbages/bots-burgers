@@ -27,15 +27,24 @@ ai-config/
 ## Install
 
 ```bash
-./install.sh                    # prompts for the Claude config dir (default ~/.claude)
-./install.sh -c ~/.claudita     # target a custom CLAUDE_CONFIG_DIR
-./install.sh -c ~/.claude -y    # non-interactive
-./install.sh --no-codex         # skip Codex
+./install.sh                      # prompts for the Claude config dir (default ~/.claude)
+./install.sh -c ~/.claudita       # target a custom CLAUDE_CONFIG_DIR
+./install.sh -c ~/.claude -y      # non-interactive
+./install.sh --no-codex           # skip Codex
+./install.sh --only skills        # install only one component
+./install.sh --only skills,commands   # ...or a few
 ```
 
-`install.sh` symlinks the shared files into the target config dir(s). Anything it
-would overwrite is backed up to `*.bak.<timestamp>` first. Re-running is safe and
-idempotent.
+`install.sh` symlinks the shared files into the target config dir(s). Directory
+components (`skills`, `commands`, `agents`) are linked **file by file**, so any
+skills/commands you already keep in the target dir are left in place — only a
+same-named entry is touched, and that is backed up to `*.bak.<timestamp>` first.
+Re-running is safe and idempotent.
+
+Use `--only` to install a subset. Valid components:
+`instructions`, `commands`, `skills`, `agents`, `settings`, `codex`
+(`settings` also wires the statusline + auto-sync shell scripts). Without `--only`,
+everything is installed.
 
 Run it once per config dir if you keep several (e.g. `~/.claude` and `~/.claudita`).
 

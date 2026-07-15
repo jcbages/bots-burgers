@@ -77,7 +77,10 @@ link() {
 render_settings() {
   local dest="$1/settings.json"
   local rendered
-  rendered="$(sed "s|__STATUSLINE__|$REPO_DIR/shell/statusline.sh|g" "$REPO_DIR/settings/settings.json")"
+  rendered="$(sed \
+    -e "s|__STATUSLINE__|$REPO_DIR/shell/statusline.sh|g" \
+    -e "s|__SYNC__|$REPO_DIR/shell/sync.sh|g" \
+    "$REPO_DIR/settings/settings.json")"
   if [ -e "$dest" ] && [ ! -L "$dest" ] && [ "$rendered" != "$(cat "$dest")" ]; then
     mv "$dest" "${dest}.bak.$(stamp)"
     echo "  backup  $dest -> ${dest}.bak.*"

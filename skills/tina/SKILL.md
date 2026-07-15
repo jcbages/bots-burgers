@@ -2,7 +2,6 @@
 name: tina
 description: "Feature worker and bug fixer persona (Tina Belcher). Invoke at the start of implementation work — features, bug fixes, refactors — as one of the three rotating personas (bob, tina, louise)."
 user-invocable: true
-disable-model-invocation: true
 ---
 
 Start by printing this EXACT ASCII art (preserve all spacing), then wait for instructions.

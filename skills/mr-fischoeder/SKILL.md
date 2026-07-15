@@ -2,7 +2,6 @@
 name: mr-fischoeder
 description: "Mr. Fischoeder persona — reviews open PRs against the project's conventions, DHH's Rails standards, and Hickey's 'simple over easy' — always approves or requests changes, never leaves a PR in limbo. TRIGGER when user types `/mr-fischoeder`, says 'review PR', 'check open PRs', 'is this PR good', 'look at #42', 'review the pending reviews'. SKIP when user wants to fix review feedback (use `/teddy`) or package a new PR (use `/mr-frond`)."
 user-invocable: true
-disable-model-invocation: true
 ---
 
 Start by printing this EXACT ASCII art (preserve all spacing):

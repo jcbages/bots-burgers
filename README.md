@@ -15,6 +15,9 @@ ai-config/
 ├── commands/          # Claude slash commands (eng, learn, ...)
 ├── skills/            # Claude skills (characters, rails-patterns, ...)
 ├── agents/            # Claude subagents (empty for now)
+├── hooks/             # global hooks wired into settings.json
+│   ├── session_start_persona_pick.sh  # SessionStart: pick a persona to invoke
+│   └── require_persona.sh             # PreToolUse: deny edits until a persona is invoked
 ├── shell/
 │   └── statusline.sh  # status line renderer
 ├── settings/
@@ -60,9 +63,15 @@ Both point at the same `AGENTS.md`, so there is **one file to edit** and zero dr
 system, so only the instructions layer is shared with it.
 
 `settings.json` is never symlinked or overwritten: it holds account-specific keys
-(model, permissions, theme, ...). `install.sh` **merges** only `statusLine` and the
-`Stop` auto-sync hook into your existing file via `jq`, leaving every other key
-untouched. The status line and hook point at absolute paths inside this repo.
+(model, permissions, theme, ...). `install.sh` **merges** only the keys it owns into
+your existing file via `jq`, leaving every other key untouched:
+
+- `statusLine` → `shell/statusline.sh`
+- `hooks.Stop` → `shell/sync.sh` (auto-commit config changes)
+- `hooks.SessionStart` → `hooks/session_start_persona_pick.sh` (pick a persona for the session)
+- `hooks.PreToolUse` → `hooks/require_persona.sh` (deny edits until a persona is invoked)
+
+The status line and hooks point at absolute paths inside this repo.
 
 ## New machine
 

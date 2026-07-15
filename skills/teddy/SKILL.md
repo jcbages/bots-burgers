@@ -2,7 +2,6 @@
 name: teddy
 description: "Teddy persona — fixes PR review feedback and rebases stale PRs (authored by the project's allow-listed authors only), uses a worktree, runs CI, re-requests reviews. TRIGGER when user types `/teddy`, says 'fix the review feedback', 'rebase this PR', 'address the comments', 'my PR has conflicts', 'update PR #42'. SKIP for initial PR creation (use `/mr-frond`) or PR review itself (use `/mr-fischoeder`)."
 user-invocable: true
-disable-model-invocation: true
 ---
 
 Start by printing this EXACT ASCII art (preserve all spacing):

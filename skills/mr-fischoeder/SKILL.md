@@ -46,7 +46,7 @@ You review pull requests. You MUST always either **approve** or **request change
 
 ---
 
-**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `repo`, `linear.ticket_prefix`, `docs.conventions`, `docs.domain_map`, `docs.patterns_skill`, and `docs.bug_checklist`. Pass `--repo <repo>` to every `gh` call. Never hardcode a repo slug.
+**Project settings:** read `~/.claudita/skills/_shared/project-config.md` — settings are inferred, no config file required. Resolve `repo` (via `gh repo view`), the conventions doc (`CLAUDE.md` if present), the patterns skill (`/rails-patterns` for a Rails project), and the bug checklist (builtin). Pass `--repo <repo>` to every `gh` call. Never hardcode a repo slug.
 
 ## Default Behavior: Review All Pending PRs
 
@@ -86,10 +86,10 @@ git worktree remove <worktree_base>/<branch-name>
 
 Read the project's standards before reviewing any code:
 
-1. **Read `docs.conventions`** (e.g. `CLAUDE.md`) — project rules, CI-enforced conventions, testing requirements, architectural principles
-2. **If `docs.patterns_skill` is set, read that skill** — code examples for every pattern (controllers, models, concerns, jobs, JS, views)
-3. **If `docs.domain_map` is set, read it** — the domain model map
-4. **Read the bug checklist** — `docs.bug_checklist` if set, else `~/.claudita/skills/_shared/bug-checklist.md`
+1. **Read the conventions doc** (`CLAUDE.md` if present) — project rules, CI-enforced conventions, testing requirements, architectural principles
+2. **For a Rails project, read `/rails-patterns`** — code examples for every pattern (controllers, models, concerns, jobs, JS, views)
+3. **If the project has a domain map, read it** — the domain model map
+4. **Read the bug checklist** — the built-in `~/.claudita/skills/_shared/bug-checklist.md`, plus any the project's `CLAUDE.md` names
 
 You cannot review against standards you haven't read. Do this once at the start.
 
@@ -104,11 +104,11 @@ If linked to a Linear ticket, the title **should** follow `[<PREFIX>-XX] <ticket
 If a ticket is linked, fetch it and verify the PR description and code changes align with the ticket. If they don't match, **request changes**.
 
 ### 3. Bugs & Potential Issues (BE THOROUGH)
-The most important step. Run the **full bug checklist** (`docs.bug_checklist`, else the shared one). Read the diff top-to-bottom once for intent, then re-read **bottom-up** for bugs, actively trying to *produce* each failure. The implementer ran this same checklist — catch what author-blindness hid. Any issue → **request changes** with file + line references.
+The most important step. Run the **full bug checklist** (the built-in one, plus any the project names). Read the diff top-to-bottom once for intent, then re-read **bottom-up** for bugs, actively trying to *produce* each failure. The implementer ran this same checklist — catch what author-blindness hid. Any issue → **request changes** with file + line references.
 
 ### 4. Convention Compliance (BE STRICT)
 
-Code must follow the project's conventions (`docs.conventions`) and, for Rails projects, be idiomatic Rails (see `docs.patterns_skill`). **Read those files** before reviewing. Request changes for any violation of the documented conventions — do NOT invent rules the project doesn't state. Common things worth checking (verify against the project's own docs, don't assume):
+Code must follow the project's conventions (its repo-root `CLAUDE.md`) and, for Rails projects, be idiomatic Rails (see `/rails-patterns`). **Read those files** before reviewing. Request changes for any violation of the documented conventions — do NOT invent rules the project doesn't state. Common things worth checking (verify against the project's own docs, don't assume):
 
 - Logic that belongs in models leaking into controllers (fat models, thin controllers)
 - Service objects / interactors / form objects where the framework doesn't need them

@@ -1,63 +1,21 @@
-# Project Config (preamble for shared skills)
+# Project Settings (inferred — no config file required)
 
-These skills are generic and live in `~/.claudita/skills/`. Everything project-specific — repo, Linear team, ticket prefix, CI command — is read from a per-project config file, never hardcoded.
+These skills are generic and live in `~/.claudita/skills/`. They work out project-specific settings by **inference** — there is no required config file. If a project needs a specific value, note it in the project's `CLAUDE.md` (or README) and honor whatever it says.
 
-## Step 0 (do this before anything else)
+## How each setting is resolved
 
-Read `.claude/project.yml` at the repo root. **The file is optional** — every value is either inferable or promptable. Use it to pin the things that are expensive to guess wrong (repo slug, CI command); let the rest be inferred. If a value you need is neither in config nor cheaply derivable, ask — never assume.
+- **repo** (`owner/name`) — `gh repo view --json nameWithOwner`.
+- **worktree base** — `/tmp/<repo-name>` (created if missing).
+- **CI command** — probe in order: `bin/ci` → `bin/rails test` / the stack's test runner. Never invent one; if unsure, ask.
+- **conventions doc** — the repo-root `CLAUDE.md`, if present. It's the source of truth for architecture, testing, and workflow rules.
+- **patterns skill** — `/rails-patterns` for a Rails project (`bin/rails` or a Rails `Gemfile`); otherwise none. Never assume Rails.
+- **bug checklist** — the built-in `~/.claudita/skills/_shared/bug-checklist.md`, plus any checklist the project's `CLAUDE.md` points to.
+- **PR body** — the built-in template (`~/.claudita/skills/mr-frond/assets/pr-body.md`).
 
-## Schema (all keys optional)
+## Linear is off by default
 
-```yaml
-# .claude/project.yml — consumed by generic ~/.claudita skills. All keys optional.
-repo: owner/name              # GitHub slug (for gh). Inferred from `gh repo view` if absent.
-worktree_base: /tmp/app       # where worktrees are created. Defaults to /tmp/app.
-
-linear:                       # OPTIONAL — omit the whole block to disable Linear entirely.
-  team: TeamName              # inferred from the MCP if a single team is connected
-  ticket_prefix: KEY          # -> "[KEY-123]"
-  users:                      # username -> Linear email (used by /linda)
-    someuser: someuser@example.com
-
-ci:
-  command: bin/ci             # full CI gate
-  test_command: bin/rails test
-
-pr:
-  body_template: null         # optional path to a PR body template; null = built-in
-
-docs:
-  conventions: CLAUDE.md      # project conventions doc
-  domain_map: null            # optional domain map (e.g. DOMAIN.md); null if none
-  patterns_skill: rails-patterns   # patterns skill to reference (or null)
-  bug_checklist: builtin      # "builtin" = ~/.claudita/skills/_shared/bug-checklist.md,
-                              # or a path to the project's own checklist
-```
-
-## What must be set vs what is inferred
-
-**Nothing is strictly required** — but pin the values that are costly to get wrong.
-
-| Value | If absent | Advice |
-|---|---|---|
-| `repo` | derived from `gh repo view --json nameWithOwner` (offer to write it back) | pin it |
-| `worktree_base` | defaults to `/tmp/app` | leave default |
-| `ci.command` / `test_command` | probe `bin/ci` → `bin/rails test` → detect the stack's runner; never invent one | pin it |
-| `linear:` block | **Linear is disabled** — ticket steps are skipped | pin only if you use Linear |
-| `linear.team` (block present) | infer the single connected team from the MCP; else ask | optional |
-| `linear.users` | resolve via the Linear MCP `list_users`; else ask | optional |
-| `pr.body_template` | built-in template | optional |
-| `docs.conventions` | no conventions doc is read | pin if you have one |
-| `docs.domain_map` / `patterns_skill` | not referenced | optional |
-| `docs.bug_checklist` | `builtin` checklist | optional |
-
-## Linear is optional
-
-If the `linear:` block is absent **or** the Linear MCP is not connected, treat Linear as unavailable:
-
-- **/gene, /mr-frond** — skip the ticket step and drop the `[<PREFIX>-XX]` prefix from commits, branches, and PR titles; use a plain imperative description instead. Everything else runs normally.
-- **/linda** — Linda's whole job is Linear. Without the MCP connected she can't work: say so plainly and stop. With the MCP connected but no `linear.team`, infer the single connected team (or ask).
+Linear is **not** used unless a project opts in. If the project's `CLAUDE.md` names a Linear team **and** the Linear MCP is connected, the ticket steps in `/gene` and `/mr-frond` turn on and use `[PREFIX-NN]` prefixes on commits, branches, and PR titles. Otherwise those steps are skipped and plain descriptions are used. `/linda` needs the Linear MCP; without it, say so and stop.
 
 ## Golden rule
 
-Never hardcode a repo slug, team name, ticket prefix, or CI command. If a value isn't in config and isn't cheaply derivable, ask — don't assume.
+Never hardcode a repo slug, CI command, or team name — and never block on a missing config file. Infer what you can, honor anything the project's `CLAUDE.md` specifies, and ask when a value is neither inferable nor documented.

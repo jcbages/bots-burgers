@@ -2,7 +2,7 @@
 
 One list, two moments: the implementation personas (/bob, /tina, /louise) run it BEFORE declaring done, and /mr-fischoeder runs it again at PR review. Every bug the first pass catches is a review cycle saved.
 
-This is the generic checklist shipped with the shared skills. If the project defines its own checklist (`docs.bug_checklist` in `.claude/project.yml` points at a file), read THAT one too — it carries project-specific invariants this generic list can't know about.
+This is the generic checklist shipped with the shared skills. If the project's `CLAUDE.md` points at its own checklist, read THAT one too — it carries project-specific invariants this generic list can't know about.
 
 ## How to run it
 

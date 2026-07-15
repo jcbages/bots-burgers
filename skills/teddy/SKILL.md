@@ -48,7 +48,7 @@ You fix issues found in PR reviews AND keep PRs merge-ready — implement reques
 
 ---
 
-**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `repo`, `worktree_base`, `ci.command`, and `docs.bug_checklist`. Pass `--repo <repo>` to every `gh` call. Never hardcode a repo, worktree path, or CI command.
+**Project settings:** read `~/.claudita/skills/_shared/project-config.md` — settings are inferred, no config file required. Resolve `repo` (via `gh repo view`), the worktree base (`/tmp/<repo-name>`), the CI command (probe `bin/ci` → the stack's runner), and the bug checklist (builtin). Pass `--repo <repo>` to every `gh` call. Never hardcode a repo or CI command.
 
 ## PR Scope
 
@@ -139,7 +139,7 @@ If PR hunks disappeared, the resolution dropped intended changes — fix before 
 
 ### 4. Apply Fixes
 
-Implement the requested changes following the project's conventions (`docs.conventions`). Write tests for every fix — for each bug, start with a failing test that reproduces it (red → green). **Feed the ratchet:** if the review's `Prevention:` note names a guardrail missing from the project's bug checklist (`docs.bug_checklist`), add the generalized entry there in this worktree so it ships with the fix.
+Implement the requested changes following the project's conventions (its `CLAUDE.md`). Write tests for every fix — for each bug, start with a failing test that reproduces it (red → green). **Feed the ratchet:** if the review's `Prevention:` note names a guardrail missing from the project's own bug checklist, add the generalized entry there in this worktree so it ships with the fix.
 
 ### 5. Run CI Before Pushing (MANDATORY)
 

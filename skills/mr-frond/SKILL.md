@@ -42,9 +42,9 @@ You take the messy reality of a coding session — where multiple agents may be 
 
 ---
 
-**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `repo`, `worktree_base`, `ci.command`, `pr.body_template`, and `docs.bug_checklist`. Never hardcode a repo slug, worktree path, or CI command. Pass `--repo <repo>` to every `gh` call.
+**Project settings:** read `~/.claudita/skills/_shared/project-config.md` — settings are inferred, no config file required. Resolve `repo` (via `gh repo view`), the worktree base (`/tmp/<repo-name>`), the CI command (probe `bin/ci` → the stack's runner), the PR body template (builtin), and the bug checklist (builtin). Never hardcode a repo slug or CI command. Pass `--repo <repo>` to every `gh` call.
 
-**Linear is optional.** `linear.team` and `linear.ticket_prefix` (referred to below as `<PREFIX>`) are used only when the `linear:` block is present **and** the Linear MCP is connected. If Linear is unavailable, skip the ticket step (step 4) and drop the `[<PREFIX>-XX]` prefix from the branch name, commits, and PR title — use a plain imperative description instead.
+**Linear is off by default.** A ticket prefix (`<PREFIX>` below) is used only when the project's `CLAUDE.md` names a Linear team **and** the Linear MCP is connected. Otherwise skip the ticket step (step 4) and drop the `[<PREFIX>-XX]` prefix from the branch name, commits, and PR title — use a plain imperative description instead.
 
 ---
 
@@ -59,7 +59,7 @@ Establish:
 - **Which files were touched** — as part of this session
 - **What's unrelated** — changes from other sessions/agents that must NOT be included
 
-**Definition-of-Done gate (MANDATORY):** confirm the session ran a fresh-eyes review of the diff plus green tests with evidence. If the fresh-eyes review never happened, spawn a fresh-context review subagent on the session diff (scoped to `docs.bug_checklist`, else `~/.claudita/skills/_shared/bug-checklist.md`, and the feature's intent) NOW, and have real findings fixed before packaging. Unreviewed changes do not get filed.
+**Definition-of-Done gate (MANDATORY):** confirm the session ran a fresh-eyes review of the diff plus green tests with evidence. If the fresh-eyes review never happened, spawn a fresh-context review subagent on the session diff (scoped to the built-in `~/.claudita/skills/_shared/bug-checklist.md` (plus any the project names) and the feature's intent) NOW, and have real findings fixed before packaging. Unreviewed changes do not get filed.
 
 ### 2. Audit All Uncommitted Changes
 
@@ -86,7 +86,7 @@ Be paranoid here. A wrong hunk included or excluded can break things.
 
 **If Linear is not configured or the MCP isn't connected, skip this step** — the PR uses a plain description with no ticket prefix.
 
-Otherwise: check if a ticket was mentioned during the session. If not, search the Linear MCP for a matching ticket in `linear.team`, and ask the user to confirm. If none exists, invoke `/linda` to create one, so PR titles can follow `[<PREFIX>-XX] description`.
+Otherwise: check if a ticket was mentioned during the session. If not, search the Linear MCP for a matching ticket in the project's Linear team, and ask the user to confirm. If none exists, invoke `/linda` to create one, so PR titles can follow `[<PREFIX>-XX] description`.
 
 ### 5. Set Up Worktree and Stage Changes
 
@@ -147,7 +147,7 @@ cd <worktree_base>/<branch-name>
 git push -u origin <branch-name>
 ```
 
-Build the PR body from `pr.body_template` if set, else the built-in `~/.claudita/skills/mr-frond/assets/pr-body.md`. Substitute placeholders (including the `<TICKET>` reference), then:
+Build the PR body from the built-in `~/.claudita/skills/mr-frond/assets/pr-body.md` (or a template the project's `CLAUDE.md` names). Substitute placeholders (including the `<TICKET>` reference), then:
 
 ```bash
 gh pr create --repo <repo> --head <branch-name> --title "[<PREFIX>-XX] Title matching the ticket" --body "<rendered body>"

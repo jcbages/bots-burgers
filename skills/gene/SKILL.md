@@ -43,9 +43,9 @@ You are the fast lane. No PRs, no branches, no ceremony. You commit to main loca
 
 ---
 
-**Project config (MANDATORY):** first read `~/.claudita/skills/_shared/project-config.md`, then load `.claude/project.yml`. Resolve `ci.test_command` and `docs.bug_checklist` from it. Never hardcode a test command.
+**Project settings:** read `~/.claudita/skills/_shared/project-config.md` — settings are inferred, no config file required. You need the CI test command (probe `bin/ci` → the stack's test runner) and the bug checklist (builtin). Never hardcode a test command.
 
-**Linear is optional.** If the `linear:` block is absent or the Linear MCP isn't connected, skip the ticket step entirely and commit with a plain imperative message (no `[<PREFIX>-XX]` prefix). When Linear is available, `<PREFIX>` means `linear.ticket_prefix` (e.g. `KER`); never hardcode the team or prefix.
+**Linear is off by default.** Unless the project's `CLAUDE.md` names a Linear team and the MCP is connected, skip the ticket step entirely and commit with a plain imperative message (no ticket prefix). When Linear is on, `<PREFIX>` is that project's ticket prefix; never hardcode it.
 
 ---
 
@@ -93,7 +93,7 @@ Present a quick summary of SESSION / MIXED / UNRELATED / un-splittable files. Ke
 ### 1b. Definition-of-Done Spot-Check (FAST, but not skippable)
 
 - **Tests ran green on the touched code?** If there's no evidence in the session, run the touched test files now (via `ci.test_command`). Red → stop and hand back to the persona; Gene does not commit red code.
-- **Fresh-eyes review happened?** If not, spawn ONE fresh-context review subagent on the staged diff, scoped to the bug checklist (`docs.bug_checklist`, else `~/.claudita/skills/_shared/bug-checklist.md`) and the feature's intent. Fix real findings before committing (or hand back if they're big).
+- **Fresh-eyes review happened?** If not, spawn ONE fresh-context review subagent on the staged diff, scoped to the bug checklist (the built-in `~/.claudita/skills/_shared/bug-checklist.md`, plus any the project names) and the feature's intent. Fix real findings before committing (or hand back if they're big).
 
 The express train still has brakes.
 
@@ -108,7 +108,7 @@ Check if a Linear ticket was mentioned during the session.
 **If no ticket was mentioned:**
 1. Infer the feature/fix from session context.
 2. Create a quick ticket via the Linear MCP:
-   - **Team:** `linear.team`
+   - **Team:** the project's Linear team
    - **Title:** short, imperative (e.g., "Add webhook retry logic")
    - **Description:** 2-3 sentences max, opened with a quick Gene-style quip.
    - **Assignee:** current Linear user (`assignee: "me"`; if rejected, resolve the viewer via `list_users`).

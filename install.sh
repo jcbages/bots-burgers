@@ -128,11 +128,13 @@ link_into_dir() {
   done
 }
 
-# Merge statusLine + our hooks into the existing settings.json, PRESERVING every
-# other key (model, permissions, theme, ...). Creates a minimal file if none exists.
-# settings.json is account-specific, so it is never symlinked or overwritten
-# wholesale. The hook scripts live in this repo and are referenced by absolute path
-# (like the statusline), so they are not symlinked. Requires jq.
+# Merge statusLine + permissions.defaultMode + our hooks into the existing
+# settings.json, PRESERVING every other key (model, theme, autoMode, ...). Creates a
+# minimal file if none exists. settings.json is account-specific, so it is never
+# symlinked or overwritten wholesale. The hook scripts live in this repo and are
+# referenced by absolute path (like the statusline), so they are not symlinked.
+# Requires jq. Note: defaultMode "auto" only takes effect in ~/.claude/settings.json;
+# Claude Code ignores it in project/local settings.
 #
 # Hooks wired globally:
 #   Stop         -> hooks/require_dod.sh                (Definition-of-Done gate after source edits)
@@ -156,6 +158,7 @@ merge_settings() {
     --arg no_kamal "$REPO_DIR/hooks/block_kamal_mutations.sh" \
     --arg astgrep "$REPO_DIR/hooks/ast_grep_scan.sh" \
     '.statusLine = {type: "command", command: $sl}
+     | .permissions.defaultMode = "auto"
      | .hooks.Stop = [ { hooks: [ { type: "command", command: $dod, statusMessage: "Checking Definition of Done..." }, { type: "command", command: $sync } ] } ]
      | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." } ] } ]
      | .hooks.PreToolUse = [

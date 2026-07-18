@@ -20,6 +20,12 @@ else COLOR="$GREEN"; fi
 
 FILLED=$((PCT / 10))
 EMPTY=$((10 - FILLED))
-BAR=$(printf "%${FILLED}s" | tr ' ' '█')$(printf "%${EMPTY}s" | tr ' ' '░')
+
+repeat() {
+  local count=$1 char=$2 out=""
+  while ((count-- > 0)); do out+="$char"; done
+  printf '%s' "$out"
+}
+BAR="$(repeat "$FILLED" '█')$(repeat "$EMPTY" '░')"
 
 echo -e "[$MODEL] $BRANCH | ${TOKENS_USED} tokens | ${COLOR}${BAR} ${PCT}%${RESET}"

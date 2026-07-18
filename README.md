@@ -17,11 +17,14 @@ ai-config/
 ├── agents/            # Claude subagents (empty for now)
 ├── hooks/             # global hooks wired into settings.json
 │   ├── session_start_persona_pick.sh  # SessionStart: pick a persona to invoke
-│   └── require_persona.sh             # PreToolUse: deny edits until a persona is invoked
+│   ├── require_persona.sh             # PreToolUse: deny edits until a persona is invoked
+│   ├── block_branch_creation.sh      # PreToolUse (Bash): stay on main, no feature branches
+│   ├── block_kamal_mutations.sh      # PreToolUse (Bash): no Kamal prod mutations
+│   ├── ast_grep_scan.sh              # PostToolUse: structural lint of the written file
+│   └── require_dod.sh                # Stop: Definition-of-Done gate after source edits
 ├── shell/
-│   └── statusline.sh  # status line renderer
-├── settings/
-│   └── settings.json  # settings template (__STATUSLINE__ is filled in at install)
+│   ├── statusline.sh  # status line renderer
+│   └── sync.sh        # Stop: auto-commit config changes
 ├── codex/
 │   └── config.example.toml
 └── install.sh
@@ -46,7 +49,8 @@ Re-running is safe and idempotent.
 
 Use `--only` to install a subset. Valid components:
 `instructions`, `commands`, `skills`, `agents`, `settings`, `codex`
-(`settings` also wires the statusline + auto-sync shell scripts). Without `--only`,
+(`settings` also wires the statusline + the Stop/SessionStart/PreToolUse/PostToolUse
+hooks). Without `--only`,
 everything is installed.
 
 Run it once per config dir if you keep several (e.g. `~/.claude` and `~/.claudita`).
@@ -67,9 +71,10 @@ system, so only the instructions layer is shared with it.
 your existing file via `jq`, leaving every other key untouched:
 
 - `statusLine` → `shell/statusline.sh`
-- `hooks.Stop` → `shell/sync.sh` (auto-commit config changes)
+- `hooks.Stop` → `hooks/require_dod.sh` (Definition-of-Done gate) + `shell/sync.sh` (auto-commit config changes)
 - `hooks.SessionStart` → `hooks/session_start_persona_pick.sh` (pick a persona for the session)
-- `hooks.PreToolUse` → `hooks/require_persona.sh` (deny edits until a persona is invoked)
+- `hooks.PreToolUse` → `hooks/require_persona.sh` (deny edits until a persona is invoked); on `Bash`, `block_branch_creation.sh` + `block_kamal_mutations.sh`
+- `hooks.PostToolUse` → `hooks/ast_grep_scan.sh` (structural lint of the written file)
 
 The status line and hooks point at absolute paths inside this repo.
 

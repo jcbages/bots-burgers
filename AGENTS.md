@@ -75,3 +75,30 @@ Code should not merely work — it should be **exemplary**. Would it be accepted
 **Red flags:** a method that knows both *what* to do and *how*; a class holding multiple unrelated responsibilities; the same policy scattered across many conditionals; a "simple" facade that hides complexity instead of eliminating it.
 
 **Test:** Can you reason about each part independently? Or are concerns braided together?
+
+---
+
+# Working Standards (applies to all projects)
+
+These are framework-agnostic. A project's own `CLAUDE.md` may add stack-specific steps on top.
+
+## Definition of Done
+
+No implementation work (feature, bug fix, refactor) is done until every step has run — this is how bugs get caught in the first pass instead of in review. A `Stop` hook (`hooks/require_dod.sh`) enforces steps 3–4 after any source edit; reply `skip dod` to bypass it for a session.
+
+1. **Adversarial self-review of the diff.** Re-read the full `git diff` — top-down for intent, then bottom-up for bugs — against the shared bug checklist (`skills/_shared/bug-checklist.md`, plus any the project's `CLAUDE.md` names). Actively try to break the code; confirming the happy path is not reviewing.
+2. **Sad-path tests.** Every new behavior gets at least one adversarial test (absent field, empty collection, unauthorized direct request, mid-batch failure) alongside the happy path. Bug fixes **start red** — reproduce the bug with a failing test first, then fix to green; never adjust a test to make the implementation pass.
+3. **Fresh-eyes review.** Run `/code-review` on the session diff (or spawn a fresh-context review subagent scoped to the bug checklist) and fix real findings in-loop. Self-review misses the author's own bugs; a clean context does not.
+4. **Green tests with evidence.** Run the touched tests (the stack's runner) and show the output. "It should pass" is not evidence. When there's a runtime surface (UI, endpoint), drive the actual flow — unit tests alone don't prove the feature works.
+
+## Blast radius
+
+Keep changes small and focused. Evaluate scope before starting — if a task touches more than ~5–6 files, consider splitting it. Small changes are easier to review, test, and ship.
+
+## Screenshots
+
+When the user shares a screenshot of a UI issue or a desired design, treat it as primary context — faster and more precise than a verbal description.
+
+## Codebase navigation
+
+Before exploring an unfamiliar codebase, use `/project-domain` — it reads (or, the first time, bootstraps) the project's `PROJECT_DOMAIN.md` map so you land on the right file instead of blind searching. Keep the map current as you change significant logic.

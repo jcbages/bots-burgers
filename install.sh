@@ -22,7 +22,7 @@
 #       --no-codex         Do not touch Codex.
 #       --only LIST        Comma-separated components to install (default: all).
 #                          Valid: instructions, commands, skills, agents, settings, codex.
-#                          ('settings' also wires the statusline + Stop/SessionStart/PreToolUse hooks.)
+#                          ('settings' also wires the statusline + Stop/SessionStart/PreToolUse/PostToolUse hooks.)
 #   -y, --yes              Assume defaults, do not prompt.
 #   -h, --help             Show this help.
 #
@@ -135,9 +135,13 @@ link_into_dir() {
 # (like the statusline), so they are not symlinked. Requires jq.
 #
 # Hooks wired globally:
-#   Stop         -> shell/sync.sh                       (auto-commit config changes)
+#   Stop         -> hooks/require_dod.sh                (Definition-of-Done gate after source edits)
+#                -> shell/sync.sh                       (auto-commit config changes)
 #   SessionStart -> hooks/session_start_persona_pick.sh (pick a persona for the session)
 #   PreToolUse   -> hooks/require_persona.sh            (deny edits until a persona is invoked)
+#                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
+#                -> hooks/block_kamal_mutations.sh      (Bash: deny Kamal prod-mutating commands)
+#   PostToolUse  -> hooks/ast_grep_scan.sh              (Edit|Write: structural lint of the written file)
 merge_settings() {
   local dest="$1/settings.json"
   local base="{}"
@@ -145,14 +149,22 @@ merge_settings() {
   printf '%s' "$base" | jq \
     --arg sl "$REPO_DIR/shell/statusline.sh" \
     --arg sync "$REPO_DIR/shell/sync.sh" \
+    --arg dod "$REPO_DIR/hooks/require_dod.sh" \
     --arg pick "$REPO_DIR/hooks/session_start_persona_pick.sh" \
     --arg persona "$REPO_DIR/hooks/require_persona.sh" \
+    --arg no_branch "$REPO_DIR/hooks/block_branch_creation.sh" \
+    --arg no_kamal "$REPO_DIR/hooks/block_kamal_mutations.sh" \
+    --arg astgrep "$REPO_DIR/hooks/ast_grep_scan.sh" \
     '.statusLine = {type: "command", command: $sl}
-     | .hooks.Stop = [ { hooks: [ { type: "command", command: $sync } ] } ]
+     | .hooks.Stop = [ { hooks: [ { type: "command", command: $dod, statusMessage: "Checking Definition of Done..." }, { type: "command", command: $sync } ] } ]
      | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." } ] } ]
-     | .hooks.PreToolUse = [ { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] } ]' \
+     | .hooks.PreToolUse = [
+         { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] },
+         { matcher: "Bash", hooks: [ { type: "command", command: $no_branch }, { type: "command", command: $no_kamal } ] }
+       ]
+     | .hooks.PostToolUse = [ { matcher: "Edit|Write", hooks: [ { type: "command", command: $astgrep, statusMessage: "Running ast-grep scan..." } ] } ]' \
     > "$dest.tmp" && mv "$dest.tmp" "$dest"
-  echo "  merge   $dest (statusLine + Stop/SessionStart/PreToolUse hooks; existing keys preserved)"
+  echo "  merge   $dest (statusLine + Stop/SessionStart/PreToolUse/PostToolUse hooks; existing keys preserved)"
 }
 
 echo "Repo:        $REPO_DIR"

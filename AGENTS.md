@@ -39,6 +39,7 @@ I am learning French. Help me practice by following these rules in every convers
 
 - **Always work directly on `main`** — commit to `main` by default, and when a branch's work is finished, merge it back into `main`.
 - Only create, switch to, or stay on a non-`main` branch when I **explicitly** ask for it. Absent an explicit instruction, assume `main`.
+- **Parallel work is encouraged** — other agents may edit the same files at the same time. Seeing changes in a file you didn't make yourself is expected, not a conflict or a red flag: don't revert them, don't halt, and don't treat unexpected diffs as corruption. Rebase/merge onto the latest state, keep your own change scoped, and carry on.
 
 ---
 

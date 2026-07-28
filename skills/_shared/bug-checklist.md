@@ -25,10 +25,13 @@ This is the generic checklist shipped with the shared skills. If the project's `
 
 - **Fields are optional**: any field can be absent from an external response. Never overwrite stored data with a fallback default (e.g. `fetch(..., "unknown")`) — only write fields the API actually returned.
 - **Batch loops rescue per item**: one failing record must not abort the whole sync. Rescue inside the loop, record the failure, keep going.
+- **A transport failure must not discard collected results**: when a batch/page N fails, results from 1..N-1 must still be returned and N+1.. must still run. Catch the network-layer exceptions too (`OSError`, library-specific transport errors) — not just the HTTP-status one.
+- **Reported success must be measured, not planned**: never print "did X to N records" from the size of the input. Return per-item outcomes and report `succeeded`/`failed` from what the API actually confirmed.
 
 ## Security
 
 - SQL injection, XSS, mass assignment (are params/inputs allow-listed?), exposed secrets
+- **Exported CSV/TSV**: cells starting with `=`, `+`, `-`, `@` execute when opened in a spreadsheet. Escape them if any value came from outside, and set restrictive file permissions when the export holds user data.
 - New endpoint without auth — is it covered by the unauthorized-access test sweeps?
 
 ## Data & concurrency
@@ -54,6 +57,7 @@ This is the generic checklist shipped with the shared skills. If the project's `
 - API responses match the documented contract (schema/spec); every status code is covered
 - Every new behavior has a test AND at least one adversarial sad-path test: absent field, empty collection, unauthorized direct request, mid-batch failure
 - Bug fixes started from a failing test that reproduces the bug (red → green)
+- **A safe mode needs a tripwire test**: for any dry-run / preview / `--no-op` flag, assert the safe path against a collaborator that RAISES on any use. A test exercising the safe path proves nothing — it passes just as happily when the guard is gone. Same for a "we never do X" guard: test it in the mode where X is actually reachable.
 - A test for a form endpoint should submit the SAME fields the real form posts — including empty file inputs, which browsers always send — so param-handling regressions surface
 
 ## The ratchet (MANDATORY)

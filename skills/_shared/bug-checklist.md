@@ -26,6 +26,7 @@ This is the generic checklist shipped with the shared skills. If the project's `
 - **Fields are optional**: any field can be absent from an external response. Never overwrite stored data with a fallback default (e.g. `fetch(..., "unknown")`) — only write fields the API actually returned.
 - **Batch loops rescue per item**: one failing record must not abort the whole sync. Rescue inside the loop, record the failure, keep going.
 - **A transport failure must not discard collected results**: when a batch/page N fails, results from 1..N-1 must still be returned and N+1.. must still run. Catch the network-layer exceptions too (`OSError`, library-specific transport errors) — not just the HTTP-status one.
+- **Identifiers may not survive the operation**: some APIs mint a new id when a record moves, is versioned, or is re-parented. Never reuse an id captured before a mutation — re-resolve by a stable key. Check this before designing any "save a plan, replay it later" flow.
 - **Reported success must be measured, not planned**: never print "did X to N records" from the size of the input. Return per-item outcomes and report `succeeded`/`failed` from what the API actually confirmed.
 
 ## Security

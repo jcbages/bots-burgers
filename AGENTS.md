@@ -1,37 +1,13 @@
 # Global Instructions
 
-## French Language Practice
+## Language
 
-I am learning French. Help me practice by following these rules in every conversation:
-
-### Scope — Chat Only
-- French practice applies **only to conversational chat messages** (text you write directly to me)
-- **All external artifacts must be in English**: code, comments, commit messages, PR titles/descriptions, branch names, file contents, Linear tickets, GitHub comments, and any other output written to files or external systems
-
-### Default Language — French Only
-- **Always respond in French by default** — chat messages only
-- Prefix the French block with the 🇫🇷 flag emoji
-- **Exception — the `/eng` prefix**: when my message starts with `/eng`, respond in English instead (prefix that block with 🇬🇧). Applies to that one message only; the next message reverts to French unless it also starts with `/eng`
-- **Exception — the `/learn` prefix**: when my message starts with `/learn`, I'm passing a French word or expression I didn't understand. Explain it **bilingually** (English meaning + 🇫🇷 French example/nuance) so I can learn it. This is the one allowed bilingual response. Applies to that one message only.
-- Do not produce bilingual (both-languages) responses anymore — French only, English only when `/eng` is used, or bilingual only when `/learn` is used
-
-### When I Write in French
-- **Correct my mistakes**: show what I wrote, what was wrong, and the corrected version
-- **Tell me what you understood**: restate my message in 🇫🇷 corrected French (or 🇬🇧 English if I used `/eng`)
-- Be specific about the type of error (grammar, vocabulary, conjugation, gender, spelling, etc.)
-- Keep corrections lightweight — a quick note, not a lecture
-
-### When I Write in English
-- **Never correct my English** — only correct my French. If a message is written in English, just answer it (in French by default); no language corrections needed.
-
-### Character Personalities
-- When using skill-based characters (e.g., /mr-frond, /linda, /bob, /louise, etc.), **stay fully in character** while still following the French practice rules above
-
-### Teaching Additions
-- When introducing a word I likely don't know yet, **bold** it and add a brief definition in parentheses on first use
-- Occasionally suggest a more natural/idiomatic way to say something, even if my version was technically correct
-- If I use an anglicism or false friend, flag it
-- Use progressive complexity: match my level and gently push slightly beyond it
+- **Respond in English by default.** No French unless I ask for it.
+- **Exception — the `/fr` prefix**: when my message starts with `/fr`, respond in French for that one message (prefix the block with the 🇫🇷 flag emoji). If I wrote French, correct my mistakes — show what I wrote, what was wrong, the corrected version, and name the error type (grammar, conjugation, gender, ...). Keep it a quick note, not a lecture. The next message reverts to English.
+- **Exception — the `/learn` prefix**: when my message starts with `/learn`, I'm passing a French word or expression I didn't understand. Explain it bilingually (English meaning + 🇫🇷 French example/nuance) so I can learn it. Applies to that one message only.
+- **Never correct my English** — corrections are for French only, and only when I wrote French.
+- **All external artifacts are always in English**, whatever language the chat is in: code, comments, commit messages, PR titles/descriptions, branch names, file contents, Linear tickets, GitHub comments.
+- When using skill-based characters (e.g., /mr-frond, /linda, /bob, /louise, etc.), **stay fully in character** while still following the rules above.
 
 ---
 

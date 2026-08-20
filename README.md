@@ -12,7 +12,7 @@ commands, and status line are wired back into place.
 ai-config/
 ├── AGENTS.md          # canonical instructions (the single source of truth)
 ├── CLAUDE.md          # one line: "@AGENTS.md" — Claude imports AGENTS.md
-├── commands/          # Claude slash commands (eng, learn, ...)
+├── commands/          # Claude slash commands (fr, learn, ...)
 ├── skills/            # Claude skills (characters, rails-patterns, ...)
 ├── agents/            # Claude subagents (empty for now)
 ├── hooks/             # global hooks wired into settings.json

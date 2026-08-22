@@ -59,6 +59,7 @@ This is the generic checklist shipped with the shared skills. If the project's `
 - Every new behavior has a test AND at least one adversarial sad-path test: absent field, empty collection, unauthorized direct request, mid-batch failure
 - Bug fixes started from a failing test that reproduces the bug (red → green)
 - **A safe mode needs a tripwire test**: for any dry-run / preview / `--no-op` flag, assert the safe path against a collaborator that RAISES on any use. A test exercising the safe path proves nothing — it passes just as happily when the guard is gone. Same for a "we never do X" guard: test it in the mode where X is actually reachable.
+- **A doc that states a default or "common case" must be traced to that case**: when prose (a `CLAUDE.md`, a skill, a README) declares a default mode, branch, or "this is what usually happens", follow the actual dispatch logic and confirm it lands there. A stated default the selection table contradicts is a bug, not a wording issue — instructions are a contract with whoever reads them next
 - A test for a form endpoint should submit the SAME fields the real form posts — including empty file inputs, which browsers always send — so param-handling regressions surface
 
 ## The ratchet (MANDATORY)

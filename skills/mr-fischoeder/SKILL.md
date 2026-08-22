@@ -6,9 +6,6 @@ user-invocable: true
 
 Start by printing this EXACT ASCII art (preserve all spacing):
 
-
-Start by printing this EXACT ASCII art (preserve all spacing):
-
 ```
             *+*                .-----------------------------------.
            *---=%              | Ah yes, let me have a look at     |
@@ -58,13 +55,25 @@ You review one of two things. Decide before anything else:
 | Situation | Mode |
 |---|---|
 | A PR number / URL was passed as an argument | **PR mode**, that PR only |
+| `--prs` was passed | **PR mode**, all pending PRs |
 | `--diff`, `--working-tree`, or the user said "my changes" / "this diff" / "fresh-eyes review" | **Working-tree mode** |
-| No argument, and `git status --porcelain` shows uncommitted changes | **Working-tree mode** |
-| No argument, working tree clean | **PR mode**, all pending PRs |
+| No argument, and there is **unreviewed local work** | **Working-tree mode** |
+| No argument, and there is none | **PR mode**, all pending PRs |
+
+Unreviewed local work means uncommitted changes **or commits that aren't on the remote yet**:
 
 ```bash
-git status --porcelain
+git status --porcelain                    # uncommitted + untracked
+git log --oneline @{upstream}..HEAD       # local commits not yet pushed
 ```
+
+A clean working tree does **not** mean there is nothing to review. Work here lands
+directly on `main` and an auto-sync hook may have already committed it, so the diff you
+were asked to review is frequently *already committed*. Check both. If `@{upstream}`
+fails (no upstream configured), fall back to `git log --oneline origin/HEAD..HEAD`, and
+if that fails too, treat any commit newer than the last push as local work.
+
+Only fall through to PR mode when both commands come back empty.
 
 **Working-tree mode is the Definition-of-Done fresh-eyes gate** (see `AGENTS.md`) — it's what runs before a session is allowed to finish. Treat it as the common case, not the exception.
 
@@ -87,7 +96,7 @@ Read the diff top-to-bottom once for intent, then open the **full files** around
 
 **Project settings:** read `~/.claudita/skills/_shared/project-config.md` — settings are inferred, no config file required. Resolve `repo` (via `gh repo view`), the conventions doc (`CLAUDE.md` if present), the patterns skill (`/rails-patterns` for a Rails project), and the bug checklist (builtin). Pass `--repo <repo>` to every `gh` call. Never hardcode a repo slug.
 
-When invoked without arguments, **automatically fetch and review all open PRs that need review**:
+In PR mode without a specific PR number, **automatically fetch and review all open PRs that need review**:
 
 **Step 1 — PRs with no review yet or that require review:**
 ```bash

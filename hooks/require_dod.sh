@@ -54,7 +54,7 @@ fi
 MISSING=""
 [ -z "$TESTS_RAN" ] && MISSING="- Run the touched tests (the stack's test runner — bin/ci, rails test, rspec, npm test, pytest, go test, flutter test, ...) and show the output."
 [ -z "$REVIEW_RAN" ] && MISSING="${MISSING:+$MISSING
-}- Run a fresh-eyes review: /mr-fischoeder on the session diff (it reviews the working tree, not just PRs), or spawn a fresh-context review subagent scoped to the shared bug checklist ($CHECKLIST), and fix real findings."
+}- Run a fresh-eyes review: /mr-fischoeder --diff on the session diff (it reviews the working tree, committed and uncommitted — not just PRs), or spawn a fresh-context review subagent scoped to the shared bug checklist ($CHECKLIST), and fix real findings."
 
 [ -z "$MISSING" ] && exit 0
 

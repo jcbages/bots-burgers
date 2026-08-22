@@ -15,6 +15,8 @@ This is the generic checklist shipped with the shared skills. If the project's `
 - Every lookup (`find` / `find_by` / dictionary get / array index) — can it return nil/undefined? Is that handled?
 - Missing failure propagation where an error should surface (e.g. a non-bang save whose failure is ignored)
 - Every callback/hook — right lifecycle? Could it fail silently?
+- **A detector must not match its own output**: when code scans a shared medium (a transcript, a log, a queue, a file) for a phrase it also *writes* to that medium, it will match itself on the next pass and silently disarm. Scope the scan to the other party's records, and exclude your own marker
+- **`grep -v` filters lines, not records**: when the field you are excluding on is multi-line, a line-scoped filter drops only the line carrying the marker and lets the rest of the record through. Apply the exclusion to the whole record before splitting it into lines
 
 ## Multi-tenant & authorization invariants
 

@@ -18,8 +18,15 @@ PROJECT="${CLAUDE_PROJECT_DIR:-$(printf '%s' "$INPUT" | jq -r '.cwd // empty')}"
 
 [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] && [ -n "$PROJECT" ] || exit 0
 
-# User override for this session.
-grep -qi 'skip dod' "$TRANSCRIPT" && exit 0
+# User override for this session. Only a genuine user turn counts: a bare transcript
+# grep also matches this hook's own block message (which quotes the phrase) and any
+# assistant turn discussing it, which would silently disarm the gate after one block.
+USER_SAID_SKIP="$(jq -r 'select(.message.role=="user") | .message.content
+    | if type=="string" then . else (.[]? | select(.type=="text") | .text) end
+    | select(test("Definition of Done gate") | not)' \
+  "$TRANSCRIPT" 2>/dev/null \
+  | grep -qi 'skip dod' && echo yes || true)"
+[ -n "$USER_SAID_SKIP" ] && exit 0
 
 # Gate only sessions that edited product source in this project — by known source
 # directory or by source-file extension. Docs/config-only sessions pass through.

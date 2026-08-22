@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Stop hook: block ending a session that edited product code until the transcript
-# shows (a) test evidence and (b) a fresh-eyes review. This enforces the Definition
+# shows (a) test evidence and (b) a fresh-eyes review by /mr-fischoeder (which
+# reviews the local working tree, not just open PRs). This enforces the Definition
 # of Done (see AGENTS.md). Language/stack-agnostic: it recognizes the common test
 # runners and gates on source-file edits, not Rails-specific paths. The user can
 # bypass for a session by replying "skip dod". Wired globally by install.sh.
@@ -34,19 +35,26 @@ EDITED="$(jq -r 'select(.message.content?) | .message.content[]?
 TESTS_RAN="$(jq -r 'select(.message.content?) | .message.content[]?
     | select(.type=="tool_use" and .name=="Bash")
     | .input.command // empty' "$TRANSCRIPT" 2>/dev/null \
-  | grep -E '(^|[[:space:]])(bin/ci|(bin/|bundle exec )?rails test|(bin/|bundle exec )?rspec|(npm|pnpm|yarn)( run)? test|jest|vitest|pytest|go test|cargo test|mix test|gradle( |w )test|mvn test)' \
+  | grep -E '(^|[[:space:]])(bin/ci|(bin/|bundle exec )?rails test|(bin/|bundle exec )?rspec|(npm|pnpm|yarn)( run)? test|jest|vitest|pytest|go test|cargo test|mix test|gradle( |w )test|mvn test|flutter test|dart test)' \
   || true)"
 
 REVIEW_RAN="$(jq -r 'select(.message.content?) | .message.content[]?
     | select(.type=="tool_use")
-    | select((.name=="Skill" and .input.skill=="code-review")
-          or (.name=="Agent" and ((.input.prompt // "") | test("bug-checklist"))))
+    | select((.name=="Skill" and .input.skill=="mr-fischoeder")
+          or (.name=="Agent" and ((.input.prompt // "") | test("Mr. Fischoeder|bug-checklist"))))
     | .name' "$TRANSCRIPT" 2>/dev/null || true)"
 
+# The user can also invoke the reviewer themselves by typing the slash command,
+# which never shows up as a tool_use entry.
+if [ -z "$REVIEW_RAN" ] \
+   && grep -qE '<command-name>/mr-fischoeder|"(skill|commandName)":"mr-fischoeder"' "$TRANSCRIPT"; then
+  REVIEW_RAN="mr-fischoeder"
+fi
+
 MISSING=""
-[ -z "$TESTS_RAN" ] && MISSING="- Run the touched tests (the stack's test runner — bin/ci, rails test, rspec, npm test, pytest, go test, ...) and show the output."
-[ -z "$REVIEW_RAN" ] && MISSING="$MISSING
-- Run a fresh-eyes review: /code-review on the session diff, or spawn a fresh-context review subagent scoped to the shared bug checklist ($CHECKLIST), and fix real findings."
+[ -z "$TESTS_RAN" ] && MISSING="- Run the touched tests (the stack's test runner — bin/ci, rails test, rspec, npm test, pytest, go test, flutter test, ...) and show the output."
+[ -z "$REVIEW_RAN" ] && MISSING="${MISSING:+$MISSING
+}- Run a fresh-eyes review: /mr-fischoeder on the session diff (it reviews the working tree, not just PRs), or spawn a fresh-context review subagent scoped to the shared bug checklist ($CHECKLIST), and fix real findings."
 
 [ -z "$MISSING" ] && exit 0
 

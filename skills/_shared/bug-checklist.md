@@ -15,7 +15,8 @@ This is the generic checklist shipped with the shared skills. If the project's `
 - Every lookup (`find` / `find_by` / dictionary get / array index) — can it return nil/undefined? Is that handled?
 - Missing failure propagation where an error should surface (e.g. a non-bang save whose failure is ignored)
 - Every callback/hook — right lifecycle? Could it fail silently?
-- **A detector must not match its own output**: when code scans a shared medium (a transcript, a log, a queue, a file) for a phrase it also *writes* to that medium, it will match itself on the next pass and silently disarm. Scope the scan to the other party's records, and exclude your own marker
+- **A detector must not match its own output**: when code scans a shared medium (a transcript, a log, a queue, a file) for a phrase it also *writes* to that medium, it will match itself on the next pass and silently disarm. Enumerate every writer to the medium and exclude all of them — **a role/author field is not a provenance field**: in a shared log, agent reports, hook feedback and command echoes are commonly stored under the human's role
+- **Replacing a text scan with a structured parse is not a pure upgrade**: parsers abort where `grep` degrades. When the input is an append-only log you don't control, make per-record parse failure non-fatal (`jq -R 'fromjson? // empty'`) or one malformed line silently voids the whole scan
 - **`grep -v` filters lines, not records**: when the field you are excluding on is multi-line, a line-scoped filter drops only the line carrying the marker and lets the rest of the record through. Apply the exclusion to the whole record before splitting it into lines
 
 ## Multi-tenant & authorization invariants

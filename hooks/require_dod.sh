@@ -18,11 +18,17 @@ PROJECT="${CLAUDE_PROJECT_DIR:-$(printf '%s' "$INPUT" | jq -r '.cwd // empty')}"
 
 [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] && [ -n "$PROJECT" ] || exit 0
 
-# User override for this session. Only a genuine user turn counts: a bare transcript
-# grep also matches this hook's own block message (which quotes the phrase) and any
-# assistant turn discussing it, which would silently disarm the gate after one block.
-USER_SAID_SKIP="$(jq -r 'select(.message.role=="user") | .message.content
-    | if type=="string" then . else (.[]? | select(.type=="text") | .text) end
+# User override for this session — only a genuine human turn counts. Role is not
+# provenance here: this hook's own block message, hook feedback (isMeta), subagent
+# reports and slash-command echoes (all <tag>-wrapped) are stored with role "user"
+# too. A DoD review subagent necessarily quotes the bypass phrase while doing its
+# job, so an unfiltered scan lets the gate disarm itself. Three independent filters,
+# so drift in any one doesn't silently reopen the hole.
+USER_SAID_SKIP="$(jq -rR 'fromjson? // empty
+    | select(.message.role=="user" and .isMeta != true)
+    | if (.message.content|type)=="string" then .message.content
+      else (.message.content[]? | select(.type=="text") | .text) end
+    | select(test("^<(task-notification|command-name|command-message|local-command-|system-reminder)") | not)
     | select(test("Definition of Done gate") | not)' \
   "$TRANSCRIPT" 2>/dev/null \
   | grep -qi 'skip dod' && echo yes || true)"
@@ -30,7 +36,7 @@ USER_SAID_SKIP="$(jq -r 'select(.message.role=="user") | .message.content
 
 # Gate only sessions that edited product source in this project — by known source
 # directory or by source-file extension. Docs/config-only sessions pass through.
-EDITED="$(jq -r 'select(.message.content?) | .message.content[]?
+EDITED="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
     | select(.type=="tool_use" and (.name=="Edit" or .name=="Write" or .name=="MultiEdit"))
     | .input.file_path // empty' "$TRANSCRIPT" 2>/dev/null \
   | grep -E "^$PROJECT/" \
@@ -39,13 +45,13 @@ EDITED="$(jq -r 'select(.message.content?) | .message.content[]?
   || true)"
 [ -n "$EDITED" ] || exit 0
 
-TESTS_RAN="$(jq -r 'select(.message.content?) | .message.content[]?
+TESTS_RAN="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
     | select(.type=="tool_use" and .name=="Bash")
     | .input.command // empty' "$TRANSCRIPT" 2>/dev/null \
   | grep -E '(^|[[:space:]])(bin/ci|(bin/|bundle exec )?rails test|(bin/|bundle exec )?rspec|(npm|pnpm|yarn)( run)? test|jest|vitest|pytest|go test|cargo test|mix test|gradle( |w )test|mvn test|flutter test|dart test)' \
   || true)"
 
-REVIEW_RAN="$(jq -r 'select(.message.content?) | .message.content[]?
+REVIEW_RAN="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
     | select(.type=="tool_use")
     | select((.name=="Skill" and .input.skill=="mr-fischoeder")
           or (.name=="Agent" and ((.input.prompt // "") | test("Mr. Fischoeder|bug-checklist"))))

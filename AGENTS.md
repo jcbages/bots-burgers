@@ -13,7 +13,8 @@
 
 # Git Workflow (applies to all projects)
 
-- **Always work directly on `main`** — commit to `main` by default, and when a branch's work is finished, merge it back into `main`.
+- **Always work directly on `main`** — this is about *which branch*, never about committing unasked: when you do commit it goes to `main`, and when a branch's work is finished, merge it back into `main`.
+- **The user triggers every commit, one at a time.** Never commit unprompted, and never treat one "commit this" as standing permission for the rest of the session — consent expires the moment it is used. `hooks/require_commit_request.sh` denies any `git commit` the user has not asked for since the last one. When they do ask, `/gene` is the fast lane (it re-runs the touched tests and splits mixed files before committing).
 - Only create, switch to, or stay on a non-`main` branch when I **explicitly** ask for it. Absent an explicit instruction, assume `main`.
 - **Parallel work is encouraged** — other agents may edit the same files at the same time. Seeing changes in a file you didn't make yourself is expected, not a conflict or a red flag: don't revert them, don't halt, and don't treat unexpected diffs as corruption. Rebase/merge onto the latest state, keep your own change scoped, and carry on.
 
@@ -69,6 +70,20 @@ No implementation work (feature, bug fix, refactor) is done until every step has
 3. **Fresh-eyes review.** Run `/mr-fischoeder --diff` on the session diff — it reviews the local working tree (committed *and* uncommitted), not just open PRs — and fix real findings in-loop. (A fresh-context review subagent scoped to the bug checklist also satisfies the gate.) Self-review misses the author's own bugs; a clean context does not.
 4. **Green tests with evidence.** Run the touched tests (the stack's runner) while iterating and
    the full suite once at the end (see **Round trips**), and show the output. "It should pass" is not evidence. When there's a runtime surface (UI, endpoint), drive the actual flow — unit tests alone don't prove the feature works.
+
+## Handing off
+
+Finish a piece of work by **reporting it, not committing it**. The handoff is three things,
+and it is short:
+
+1. **Files touched, one line each on *why*** — grouped if there are many, and naming the one or
+   two that carry the actual change so a reviewer knows where to look first.
+2. **What you deliberately left out** — scope you judged out of bounds, a follow-up worth doing,
+   a finding you chose not to act on. Silence here reads as "nothing was left", which is a lie
+   more often than not.
+3. **Verification you actually ran** — the command and its result, not "should pass".
+
+Then stop. The user decides whether that becomes a commit (see the Git Workflow rules above).
 
 ## Blast radius
 

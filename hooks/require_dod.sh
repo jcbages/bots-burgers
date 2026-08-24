@@ -43,7 +43,20 @@ EDITED="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.cont
   | grep -vE '\.(md|markdown|txt|lock)$' \
   | grep -E '/(app|lib|src|db|config|test|tests|spec|internal|cmd|pkg|components|server)/|\.(rb|erb|js|jsx|ts|tsx|mjs|cjs|vue|svelte|py|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|scss|css|sql)$' \
   || true)"
-[ -n "$EDITED" ] || exit 0
+# Auto mode writes files through Bash (heredoc, sed -i, tee) — a path the dedicated
+# edit tools never see. Measured across one project's sessions: 838 source edits went
+# through Bash against 86 through Edit/Write, and nineteen sessions used Bash only, so
+# a gate watching Edit/Write alone was off for most of the work. Over-matching here is
+# the safe direction: the cost of a false positive is running the tests anyway.
+BASH_EDITED="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
+    | select(.type=="tool_use" and .name=="Bash")
+    | .input.command // empty' "$TRANSCRIPT" 2>/dev/null \
+  | grep -E "(sed -i|perl -[a-z]*i|[[:space:]]tee[[:space:]]|apply_patch|>>?[[:space:]]*[^[:space:]|&;]+\.[a-z]+)" \
+  | grep -oE '[A-Za-z0-9_./-]+\.(rb|erb|js|jsx|ts|tsx|mjs|cjs|vue|svelte|py|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|scss|css|sql|dart)' \
+  | grep -vE '^/?(tmp|private/tmp|var/folders)/|/scratchpad/|/node_modules/|^lib/' \
+  || true)"
+
+[ -n "$EDITED" ] || [ -n "$BASH_EDITED" ] || exit 0
 
 TESTS_RAN="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
     | select(.type=="tool_use" and .name=="Bash")

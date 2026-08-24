@@ -143,6 +143,7 @@ link_into_dir() {
 #                -> hooks/session_start_domain_map.sh   (point at PROJECT_DOMAIN.md, or ask to bootstrap it)
 #   PreToolUse   -> hooks/require_persona.sh            (deny edits until a persona is invoked)
 #                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
+#                -> hooks/require_commit_request.sh     (Bash: deny git commit the user didn't just ask for)
 #                -> hooks/block_kamal_mutations.sh      (Bash: deny Kamal prod-mutating commands)
 #   PostToolUse  -> hooks/ast_grep_scan.sh              (Edit|Write: structural lint of the written file)
 merge_settings() {
@@ -157,6 +158,7 @@ merge_settings() {
     --arg domain "$REPO_DIR/hooks/session_start_domain_map.sh" \
     --arg persona "$REPO_DIR/hooks/require_persona.sh" \
     --arg no_branch "$REPO_DIR/hooks/block_branch_creation.sh" \
+    --arg ask_commit "$REPO_DIR/hooks/require_commit_request.sh" \
     --arg no_kamal "$REPO_DIR/hooks/block_kamal_mutations.sh" \
     --arg astgrep "$REPO_DIR/hooks/ast_grep_scan.sh" \
     '.statusLine = {type: "command", command: $sl}
@@ -165,7 +167,7 @@ merge_settings() {
      | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." }, { type: "command", command: $domain, statusMessage: "Locating the domain map..." } ] } ]
      | .hooks.PreToolUse = [
          { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] },
-         { matcher: "Bash", hooks: [ { type: "command", command: $no_branch }, { type: "command", command: $no_kamal } ] }
+         { matcher: "Bash", hooks: [ { type: "command", command: $no_branch }, { type: "command", command: $ask_commit }, { type: "command", command: $no_kamal } ] }
        ]
      | .hooks.PostToolUse = [ { matcher: "Edit|Write", hooks: [ { type: "command", command: $astgrep, statusMessage: "Running ast-grep scan..." } ] } ]' \
     > "$dest.tmp" && mv "$dest.tmp" "$dest"

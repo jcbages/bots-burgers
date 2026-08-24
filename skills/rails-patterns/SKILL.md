@@ -1,5 +1,5 @@
 ---
-name: patterns
+name: rails-patterns
 description: "Campfire/Basecamp Rails patterns — MANDATORY reference BEFORE writing ANY Ruby/Rails/JS code in a Rails project. Covers slim controllers (1-5 lines/action), fat models with concerns, scopes, callbacks, association extensions, STI, jobs as one-liners, thin Stimulus controllers + plain-JS model classes, Alpine.js vs Stimulus choice, views, helpers, routing, testing. TRIGGER whenever user asks to add/edit/refactor/review/audit a controller, model, concern, job, serializer, view, helper, scope, migration, Stimulus controller, JS class, or test; edits any .rb, .erb, or .js file under app/ or test/; asks 'how should I structure this', 'where does this go', 'Alpine or Stimulus', 'is this the Rails way', 'what would Basecamp/DHH do', 'is this idiomatic'; writes a new action, method, class, endpoint, or data-controller wiring. Load at the START of the task, not after writing. SKIP only for: non-Rails projects, pure config/infra (Gemfile, config/*, bin/*, .github/), docs-only (*.md), trivial typos, pure CSS/asset edits."
 user-invocable: true
 metadata:

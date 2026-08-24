@@ -12,6 +12,9 @@ set -u
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CHECKLIST="$REPO_DIR/skills/_shared/bug-checklist.md"
 
+# shellcheck source=hooks/lib/bash_command.sh
+. "$REPO_DIR/hooks/lib/bash_command.sh"
+
 INPUT="$(cat)"
 TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty')"
 PROJECT="${CLAUDE_PROJECT_DIR:-$(printf '%s' "$INPUT" | jq -r '.cwd // empty')}"
@@ -40,37 +43,22 @@ EDITED="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.cont
     | select(.type=="tool_use" and (.name=="Edit" or .name=="Write" or .name=="MultiEdit"))
     | .input.file_path // empty' "$TRANSCRIPT" 2>/dev/null \
   | grep -E "^$PROJECT/" \
+  | sed "s|^$PROJECT/||" \
   | grep -vE '\.(md|markdown|txt|lock)$' \
-  | grep -E '/(app|lib|src|db|config|test|tests|spec|internal|cmd|pkg|components|server)/|\.(rb|erb|js|jsx|ts|tsx|mjs|cjs|vue|svelte|py|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|scss|css|sql)$' \
+  | grep -E "^(app|lib|src|db|config|test|tests|spec|internal|cmd|pkg|components|server)/|\.$SOURCE_EXT$" \
   || true)"
-# Auto mode writes files through Bash (heredoc, sed -i, tee) — a path the dedicated
-# edit tools never see. Measured across one project's sessions: 838 source edits went
-# through Bash against 86 through Edit/Write, and nineteen sessions used Bash only, so
-# a gate watching Edit/Write alone was off for most of the work. Over-matching here is
-# the safe direction: the cost of a false positive is running the tests anyway.
-SRC_EXT='(rb|erb|js|jsx|ts|tsx|mjs|cjs|vue|svelte|py|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|scss|css|sql|dart)'
-
-BASH_CMDS="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
+# Auto mode writes files through Bash, a path the dedicated edit tools never see, so
+# both are checked.
+BASH_EDITED="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
     | select(.type=="tool_use" and .name=="Bash")
-    | .input.command // empty' "$TRANSCRIPT" 2>/dev/null || true)"
-
-# Only the *write target* counts. Matching every source-looking path in the command
-# flags reads, greps, and a command quoted inside another command's heredoc.
-BASH_EDITED="$( { printf '%s\n' "$BASH_CMDS" \
-      | grep -oE "(>>?|[[:space:]]tee([[:space:]]+-a)?)[[:space:]]*[A-Za-z0-9_./-]+\.$SRC_EXT([[:space:]]|$)" \
-      | grep -oE "[A-Za-z0-9_./-]+\.$SRC_EXT"
-    printf '%s\n' "$BASH_CMDS" \
-      | grep -E '(sed -i|perl -[a-z]*i)' | awk '{print $NF}' | grep -E "\.$SRC_EXT$"
-  } 2>/dev/null \
-  | grep -vE '^/?(tmp|private/tmp|var/folders)/|/scratchpad/|/node_modules/|functions/lib/' \
-  || true)"
+    | .input.command // empty' "$TRANSCRIPT" 2>/dev/null | source_write_targets)"
 
 [ -n "$EDITED" ] || [ -n "$BASH_EDITED" ] || exit 0
 
 TESTS_RAN="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
     | select(.type=="tool_use" and .name=="Bash")
     | .input.command // empty' "$TRANSCRIPT" 2>/dev/null \
-  | grep -E '(^|[[:space:]])(bin/ci|(bin/|bundle exec )?rails test|(bin/|bundle exec )?rspec|(npm|pnpm|yarn)( run)? test|jest|vitest|pytest|go test|cargo test|mix test|gradle( |w )test|mvn test|flutter test|dart test|bats|[A-Za-z0-9_./-]*_test\.sh|[A-Za-z0-9_./-]*/tests?/[A-Za-z0-9_./-]+\.sh)' \
+  | grep -E '(^|[;&|][[:space:]]*)((bash|sh|zsh)[[:space:]]+|\./)?(bin/ci|(bin/|bundle exec )?rails test|(bin/|bundle exec )?rspec|(npm|pnpm|yarn)( run)? test|jest|vitest|pytest|go test|cargo test|mix test|gradle( |w )test|mvn test|flutter test|dart test|bats|[A-Za-z0-9_./-]*_test\.sh|[A-Za-z0-9_./-]*tests?/[A-Za-z0-9_./-]+\.sh)([[:space:]]|$)' \
   || true)"
 
 REVIEW_RAN="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?

@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 #
 # SessionStart hook: point Claude at the project's domain map before it starts
-# grepping. A description-triggered skill is not enough — /project-domain went
-# uninvoked across twelve sessions of one project while the hook-enforced persona
-# fired every time. Orientation gets the same treatment as the persona: injected,
-# not hoped for. Wired globally by install.sh (see merge_settings).
+# grepping. Orientation is injected rather than left to a skill description to pick
+# up, the same way the persona is. Wired globally by install.sh (see merge_settings).
 #
 set -u
 

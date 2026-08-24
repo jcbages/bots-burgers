@@ -1,47 +1,46 @@
 #!/usr/bin/env bash
 #
-# PreToolUse hook (Bash): deny `git commit` unless the user asked for it *since the
-# last commit*. Consent is per-commit, not per-session — one "commit this" used to
-# license every commit for the rest of the session (24 in one measured session).
-# Committing is the user's call and the moment they want a summary, so the denial
-# hands back the handoff report instead (see AGENTS.md "Handing off").
-# Wired globally by install.sh (see merge_settings).
+# PreToolUse hook (Bash): deny `git commit` unless the user asked for it, and treat
+# that request as spent once a commit uses it. Committing is the user's call and the
+# moment they want a summary, so the denial hands back the handoff report instead
+# (see AGENTS.md "Handing off"). Wired globally by install.sh (see merge_settings).
 #
 set -u
 
-INPUT="$(cat)"
-CMD="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=hooks/lib/bash_command.sh
+. "$REPO_DIR/lib/bash_command.sh"
 
-# Only gate commits. Amend/fixup count; everything else in git is free.
-printf '%s' "$CMD" | grep -qE '(^|[;&|[:space:]])git[[:space:]]+([^;&|]*[[:space:]])?commit([[:space:]]|$)' || exit 0
+INPUT="$(cat)"
+CMD="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' | strip_heredoc_bodies)"
+
+# Only gate commits. Amend and fixup count; every other git command is free. The
+# binary may be reached by path, so `git` is not necessarily the first word.
+printf '%s' "$CMD" \
+  | grep -qE '(^|[;&|[:space:]])([A-Za-z0-9_./-]*/)?git[[:space:]]+([^;&|]*[[:space:]])?commit([[:space:]]|$)' \
+  || exit 0
+
+# A commit in scratch space is a test fixture, not the user's history. This asks
+# where git actually runs — a commit *message* mentioning /tmp is not a location.
+GIT_DIR="$(printf '%s\n' "$CMD" | git_working_dir)"
+if [ -n "$GIT_DIR" ] && printf '%s' "$GIT_DIR" | grep -qE "$SCRATCH_PATH"; then
+  exit 0
+fi
 
 TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty')"
 [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] || exit 0
 
-# Transcript is JSONL in chronological order, so line numbers order the events.
-# A commit tool call: one line carrying both the Bash tool_use and the command.
-LAST_COMMIT="$(grep -nE '"name":"Bash"' "$TRANSCRIPT" | grep -E 'git +commit' | tail -1 | cut -d: -f1)"
+# The user's latest word decides. A request stands while it is the last thing they
+# said — long enough to commit what that request covers, across more than one repo if
+# it takes that — and ends the moment they say anything else. No stored state, so
+# nothing to go stale and no clock to get wrong: the transcript already holds the
+# answer. Role is not provenance here, which is what GENUINE_USER_TEXT settles.
+LAST_SPOKEN="$(jq -rR "$GENUINE_USER_TEXT
+  | select(test(\"Explicit-commit gate\") | not)" "$TRANSCRIPT" 2>/dev/null | tail -1)"
 
-# Genuine user intent. Role is not provenance: hook feedback, subagent reports,
-# system reminders and this hook's own denial are all stored with role "user" —
-# and the denial necessarily contains the word "commit", so it must be excluded or
-# the gate licenses itself.
-INTENT="$(jq -rR 'fromjson? // empty
-    | (input_line_number|tostring) as $n
-    | select(.message.role=="user" and .isMeta != true)
-    | ( if (.message.content|type)=="string" then .message.content
-        else ([.message.content[]? | select(.type=="text") | .text] | join("\n")) end )
-    | select(test("^<(task-notification|command-message|local-command-|system-reminder)") | not)
-    | select(test("Explicit-commit gate") | not)
-    | select(test("(?i)(\\bcommit\\b|\\bamend\\b|/gene\\b|\\bship it\\b|\\bland (it|this)\\b)"))
-    | $n' "$TRANSCRIPT" 2>/dev/null | tail -1)"
-
-[ -n "$LAST_COMMIT" ] || LAST_COMMIT=0
-[ -n "$INTENT" ] || INTENT=0
-
-if [ "$INTENT" -gt "$LAST_COMMIT" ]; then
-  exit 0
-fi
+printf '%s' "$LAST_SPOKEN" \
+  | grep -qiE '(\bcommit\b|\bamend\b|/gene\b|\bship it\b|\bland (it|this)\b)' \
+  && exit 0
 
 REASON="Explicit-commit gate (AGENTS.md): the user has not asked for a commit since the last one. Committing is theirs to trigger.
 

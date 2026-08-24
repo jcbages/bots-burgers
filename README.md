@@ -14,19 +14,21 @@ ai-config/
 ├── CLAUDE.md          # one line: "@AGENTS.md" — Claude imports AGENTS.md
 ├── commands/          # Claude slash commands (fr, learn, ...)
 ├── skills/            # Claude skills (characters, rails-patterns, ...)
-├── agents/            # Claude subagents (empty for now)
+├── agents/            # Claude subagents (explore: read-only codebase survey)
 ├── hooks/             # global hooks wired into settings.json
 │   ├── session_start_persona_pick.sh  # SessionStart: pick a persona to invoke
 │   ├── session_start_domain_map.sh    # SessionStart: point at PROJECT_DOMAIN.md (or bootstrap it)
-│   ├── require_persona.sh             # PreToolUse: deny edits until a persona is invoked
+│   ├── require_persona.sh             # PreToolUse (+Bash): deny source edits until a persona is invoked
 │   ├── block_branch_creation.sh      # PreToolUse (Bash): stay on main, no feature branches
 │   ├── require_commit_request.sh     # PreToolUse (Bash): no commit the user didn't just ask for
 │   ├── block_kamal_mutations.sh      # PreToolUse (Bash): no Kamal prod mutations
 │   ├── ast_grep_scan.sh              # PostToolUse: structural lint of the written file
-│   └── require_dod.sh                # Stop: Definition-of-Done gate after source edits
+│   ├── require_dod.sh                # Stop: Definition-of-Done gate after source edits
+│   ├── lib/bash_command.sh           # shared: what a Bash command writes, minus heredoc bodies
+│   └── test/                         # one suite per gate; run hooks/test/run_all.sh
 ├── shell/
 │   ├── statusline.sh  # status line renderer
-│   └── sync.sh        # Stop: auto-commit config changes
+│   └── config_status.sh  # Stop: report uncommitted config changes (never commits)
 ├── codex/
 │   └── config.example.toml
 └── install.sh
@@ -73,9 +75,9 @@ system, so only the instructions layer is shared with it.
 your existing file via `jq`, leaving every other key untouched:
 
 - `statusLine` → `shell/statusline.sh`
-- `hooks.Stop` → `hooks/require_dod.sh` (Definition-of-Done gate) + `shell/sync.sh` (auto-commit config changes)
+- `hooks.Stop` → `hooks/require_dod.sh` (Definition-of-Done gate) + `shell/config_status.sh` (report uncommitted config changes)
 - `hooks.SessionStart` → `hooks/session_start_persona_pick.sh` (pick a persona for the session) + `hooks/session_start_domain_map.sh` (name the project's domain map, or ask for it to be bootstrapped)
-- `hooks.PreToolUse` → `hooks/require_persona.sh` (deny edits until a persona is invoked); on `Bash`, `block_branch_creation.sh` + `require_commit_request.sh` + `block_kamal_mutations.sh`
+- `hooks.PreToolUse` → `hooks/require_persona.sh` (deny source edits until a persona is invoked); on `Bash`, `require_persona.sh` + `block_branch_creation.sh` + `require_commit_request.sh` + `block_kamal_mutations.sh`
 - `hooks.PostToolUse` → `hooks/ast_grep_scan.sh` (structural lint of the written file)
 
 The status line and hooks point at absolute paths inside this repo.

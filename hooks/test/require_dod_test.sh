@@ -3,10 +3,9 @@
 # Tests for require_dod.sh — the Definition-of-Done Stop gate.
 # Run: hooks/test/require_dod_test.sh
 #
-# This gate is load-bearing and has failed in subtle ways more than once: it matched
-# its own block message, it excluded a marker line-wise from a multi-line record, and
-# it trusted role=="user" as provenance when agent reports wear that role too. Every
-# one of those is a case below. A gate nobody tests is a suggestion.
+# The subtle cases, each one below: the gate must not match its own block message,
+# must read a multi-line record whole, and must not trust role=="user" as provenance
+# when agent reports wear that role too. A gate nobody tests is a suggestion.
 set -u
 
 # DOD_HOOK lets you point the suite at another revision of the hook, to confirm a
@@ -41,6 +40,10 @@ bash_tee='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"comm
 bash_read='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat app/lib/models/streak.dart"}}]}}'
 bash_grep='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"grep -rn Streak app/lib/models/streak.dart"}}]}}'
 bash_doc='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > README.md <<EOF\nhi\nEOF"}}]}}'
+bash_quoted_target='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > \"app/lib/models/streak.dart\" <<EOF\nclass Streak {}\nEOF"}}]}}'
+bash_sed_chain='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"sed -i .bak s/a/b/ server/src/guards.ts && npm run build"}}]}}'
+read_test_file='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat hooks/test/require_dod_test.sh"}}]}}'
+write_test_file='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > hooks/test/new_test.sh <<EOF\nx\nEOF"}}]}}'
 bash_quoted='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"python3 - <<PY\nfixture = \"cat > app/lib/models/streak.dart\"\nPY"}}]}}'
 ran_shell='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"hooks/test/require_dod_test.sh"}}]}}'
 ran_bats='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"bats test/"}}]}}'
@@ -99,10 +102,14 @@ expect PASS  "heredoc into README.md still passes" "$bash_doc"
 expect PASS  "scratchpad writes are not product code" "$bash_scratch"
 expect PASS  "Bash edit + tests + review satisfies" "$bash_heredoc" "$ran_flutter" "$skill_fisch"
 expect PASS  "a path merely quoted inside a heredoc" "$bash_quoted"
+expect BLOCK "a QUOTED redirect target"           "$bash_quoted_target"
+expect BLOCK "sed -i followed by && something"    "$bash_sed_chain"
 
 echo "== a shell-script suite is a test runner too =="
 expect PASS  "*_test.sh satisfies the test step"   "$bash_heredoc" "$ran_shell" "$skill_fisch"
 expect PASS  "bats satisfies the test step"        "$bash_heredoc" "$ran_bats" "$skill_fisch"
+expect BLOCK "READING a _test.sh is not running it" "$bash_heredoc" "$read_test_file" "$skill_fisch"
+expect BLOCK "WRITING a _test.sh is not running it" "$bash_heredoc" "$write_test_file" "$skill_fisch"
 
 echo "== a malformed line must not void a scan =="
 expect PASS  "bypass survives a bad line before it" "$edit_src" "$malformed" "$user_skip"

@@ -138,10 +138,11 @@ link_into_dir() {
 #
 # Hooks wired globally:
 #   Stop         -> hooks/require_dod.sh                (Definition-of-Done gate after source edits)
-#                -> shell/sync.sh                       (auto-commit config changes)
+#                -> shell/config_status.sh              (report uncommitted config changes)
 #   SessionStart -> hooks/session_start_persona_pick.sh (pick a persona for the session)
 #                -> hooks/session_start_domain_map.sh   (point at PROJECT_DOMAIN.md, or ask to bootstrap it)
-#   PreToolUse   -> hooks/require_persona.sh            (deny edits until a persona is invoked)
+#   PreToolUse   -> hooks/require_persona.sh            (deny source edits until a persona is invoked;
+#                                                        on Edit|Write|MultiEdit and on Bash)
 #                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
 #                -> hooks/require_commit_request.sh     (Bash: deny git commit the user didn't just ask for)
 #                -> hooks/block_kamal_mutations.sh      (Bash: deny Kamal prod-mutating commands)
@@ -152,7 +153,7 @@ merge_settings() {
   [ -f "$dest" ] && [ ! -L "$dest" ] && base="$(cat "$dest")"
   printf '%s' "$base" | jq \
     --arg sl "$REPO_DIR/shell/statusline.sh" \
-    --arg sync "$REPO_DIR/shell/sync.sh" \
+    --arg status "$REPO_DIR/shell/config_status.sh" \
     --arg dod "$REPO_DIR/hooks/require_dod.sh" \
     --arg pick "$REPO_DIR/hooks/session_start_persona_pick.sh" \
     --arg domain "$REPO_DIR/hooks/session_start_domain_map.sh" \
@@ -163,11 +164,11 @@ merge_settings() {
     --arg astgrep "$REPO_DIR/hooks/ast_grep_scan.sh" \
     '.statusLine = {type: "command", command: $sl}
      | .permissions.defaultMode = "auto"
-     | .hooks.Stop = [ { hooks: [ { type: "command", command: $dod, statusMessage: "Checking Definition of Done..." }, { type: "command", command: $sync } ] } ]
+     | .hooks.Stop = [ { hooks: [ { type: "command", command: $dod, statusMessage: "Checking Definition of Done..." }, { type: "command", command: $status } ] } ]
      | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." }, { type: "command", command: $domain, statusMessage: "Locating the domain map..." } ] } ]
      | .hooks.PreToolUse = [
          { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] },
-         { matcher: "Bash", hooks: [ { type: "command", command: $no_branch }, { type: "command", command: $ask_commit }, { type: "command", command: $no_kamal } ] }
+         { matcher: "Bash", hooks: [ { type: "command", command: $persona }, { type: "command", command: $no_branch }, { type: "command", command: $ask_commit }, { type: "command", command: $no_kamal } ] }
        ]
      | .hooks.PostToolUse = [ { matcher: "Edit|Write", hooks: [ { type: "command", command: $astgrep, statusMessage: "Running ast-grep scan..." } ] } ]' \
     > "$dest.tmp" && mv "$dest.tmp" "$dest"

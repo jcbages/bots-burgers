@@ -140,6 +140,7 @@ link_into_dir() {
 #   Stop         -> hooks/require_dod.sh                (Definition-of-Done gate after source edits)
 #                -> shell/sync.sh                       (auto-commit config changes)
 #   SessionStart -> hooks/session_start_persona_pick.sh (pick a persona for the session)
+#                -> hooks/session_start_domain_map.sh   (point at PROJECT_DOMAIN.md, or ask to bootstrap it)
 #   PreToolUse   -> hooks/require_persona.sh            (deny edits until a persona is invoked)
 #                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
 #                -> hooks/block_kamal_mutations.sh      (Bash: deny Kamal prod-mutating commands)
@@ -153,6 +154,7 @@ merge_settings() {
     --arg sync "$REPO_DIR/shell/sync.sh" \
     --arg dod "$REPO_DIR/hooks/require_dod.sh" \
     --arg pick "$REPO_DIR/hooks/session_start_persona_pick.sh" \
+    --arg domain "$REPO_DIR/hooks/session_start_domain_map.sh" \
     --arg persona "$REPO_DIR/hooks/require_persona.sh" \
     --arg no_branch "$REPO_DIR/hooks/block_branch_creation.sh" \
     --arg no_kamal "$REPO_DIR/hooks/block_kamal_mutations.sh" \
@@ -160,7 +162,7 @@ merge_settings() {
     '.statusLine = {type: "command", command: $sl}
      | .permissions.defaultMode = "auto"
      | .hooks.Stop = [ { hooks: [ { type: "command", command: $dod, statusMessage: "Checking Definition of Done..." }, { type: "command", command: $sync } ] } ]
-     | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." } ] } ]
+     | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." }, { type: "command", command: $domain, statusMessage: "Locating the domain map..." } ] } ]
      | .hooks.PreToolUse = [
          { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] },
          { matcher: "Bash", hooks: [ { type: "command", command: $no_branch }, { type: "command", command: $no_kamal } ] }

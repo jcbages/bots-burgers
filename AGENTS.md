@@ -67,7 +67,8 @@ No implementation work (feature, bug fix, refactor) is done until every step has
 1. **Adversarial self-review of the diff.** Re-read the full `git diff` — top-down for intent, then bottom-up for bugs — against the shared bug checklist (`skills/_shared/bug-checklist.md`, plus any the project's `CLAUDE.md` names). Actively try to break the code; confirming the happy path is not reviewing.
 2. **Sad-path tests.** Every new behavior gets at least one adversarial test (absent field, empty collection, unauthorized direct request, mid-batch failure) alongside the happy path. Bug fixes **start red** — reproduce the bug with a failing test first, then fix to green; never adjust a test to make the implementation pass.
 3. **Fresh-eyes review.** Run `/mr-fischoeder --diff` on the session diff — it reviews the local working tree (committed *and* uncommitted), not just open PRs — and fix real findings in-loop. (A fresh-context review subagent scoped to the bug checklist also satisfies the gate.) Self-review misses the author's own bugs; a clean context does not.
-4. **Green tests with evidence.** Run the touched tests (the stack's runner) and show the output. "It should pass" is not evidence. When there's a runtime surface (UI, endpoint), drive the actual flow — unit tests alone don't prove the feature works.
+4. **Green tests with evidence.** Run the touched tests (the stack's runner) while iterating and
+   the full suite once at the end (see **Round trips**), and show the output. "It should pass" is not evidence. When there's a runtime surface (UI, endpoint), drive the actual flow — unit tests alone don't prove the feature works.
 
 ## Blast radius
 
@@ -79,4 +80,26 @@ When the user shares a screenshot of a UI issue or a desired design, treat it as
 
 ## Codebase navigation
 
-Before exploring an unfamiliar codebase, use `/project-domain` — it reads (or, the first time, bootstraps) the project's `PROJECT_DOMAIN.md` map so you land on the right file instead of blind searching. Keep the map current as you change significant logic.
+Before exploring an unfamiliar codebase, use `/project-domain` — it reads (or, the first time,
+bootstraps) the project's `PROJECT_DOMAIN.md` map so you land on the right file instead of blind
+searching. Keep the map current as you change significant logic. A SessionStart hook
+(`hooks/session_start_domain_map.sh`) names the map for you, or tells you to bootstrap it — a
+skill that merely *describes* when it applies gets skipped in favour of one more grep.
+
+## Round trips
+
+Orientation, not typing, is where the time goes. Measured across a dozen sessions of one Flutter
+project: **93–98% of tool calls were Bash, and 64–71% of those were `cat`/`grep`/`find`** — one
+file per call, ~6s of model latency each, the same file reopened 20+ times in a single session.
+Three rules, in order of payoff:
+
+- **Batch reads into one call.** `for f in a.dart b.dart c.dart; do echo "══ $f"; cat "$f"; done`
+  is one round trip; three `cat`s are three. Same for surveys — one `grep` across the tree beats
+  five scoped ones. And never reopen a file you already read this session; scroll back instead.
+- **Delegate the survey, keep the conclusion.** When answering means sweeping many files and you
+  only want the answer, spawn a read-only subagent (`Explore`, or `general-purpose`). It reads the
+  170 grep hits; you get the paragraph. Raw exploration output is what fills the context window and
+  forces the compaction that makes you re-read everything you already knew.
+- **Full test suite once, at the end.** Iterate against the touched test file; run the whole suite
+  once before declaring done. A full-suite run after every edit was the largest single wall-clock
+  item measured — 100 minutes of one session spent re-running tests nothing had touched.

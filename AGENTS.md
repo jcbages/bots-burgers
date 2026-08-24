@@ -33,6 +33,7 @@ Code should not merely work — it should be **exemplary**. Would it be accepted
 - **Convention over Configuration** — Flow WITH the framework, never fight it. If it feels forced, it's probably wrong.
 - **Declarative over imperative** — Prefer the framework's DSLs and higher-level constructs over manual step-by-step logic.
 - **Self-documenting** — Comments are a code smell. Rename things until you don't need one. A comment is a last resort for a non-obvious *why* — 1-2 sentences, never a paragraph restating what the code does.
+- **No archaeology in comments** — Never explain what the code *used to* do, what bug it once had, or why the previous approach was wrong. "Derived here, not in didChangeDependencies, because…", "the store used to…", "this fixes…" — all of it belongs in the commit message, where it is attached to the change that needed it. A comment is read by someone working on the code as it is now; the history is one `git blame` away and does not rot. Only the *currently* non-obvious constraint earns a line: "single-subscription, so this must be the only listener" stays, "the old code subscribed twice" goes.
 - **No unnecessary metaprogramming** — Question any dynamic dispatch / reflection / macro that isn't essential.
 - **Programmer happiness** — Would you enjoy maintaining this? Does it spark joy or dread?
 

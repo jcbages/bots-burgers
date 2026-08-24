@@ -50,6 +50,7 @@ This is the generic checklist shipped with the shared skills. If the project's `
 - Empty collections, nil/undefined values, boundary conditions
 - Error paths handled — what does the user actually see when it fails?
 - **A translucent fill on an elevated surface shows that surface's own drop shadow**: a shape that casts a shadow (Material `elevation`, CSS `box-shadow`) paints it *beneath* its own fill, so a fill under 100% opacity renders far darker than its alpha implies — a 12% wash lands mid-grey. Blend the fill against its background into an opaque color. Verify by sampling a pixel from a real render; computing the blend in a test agrees with the bug.
+- **Making a shared translucent token opaque fixes one surface and breaks every other**: a wash is *relative* — it steps off whatever is behind it — while a blended color is absolute and only correct against the one background it was blended for. A shape drawn inside a container that now shares that exact color renders invisible. Enumerate the token's consumers and split the role (`wash` for content, `resolved` for the elevated surface) rather than redefining the one token.
 - Time comparisons that race the wall clock — pin time in tests, never sleep
 
 ## Performance

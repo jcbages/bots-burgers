@@ -58,6 +58,9 @@ This is the generic checklist shipped with the shared skills. If the project's `
 - N+1: associations loaded in loops without eager-loading (`includes`/`preload` or equivalent)
 - New scope/query: does it need an index? Could it scan the whole table?
 
+- **A component theme is not applied until you check what overrides it at the call site AND what the framework substitutes underneath it**: a widget-level property beats the theme's, and some frameworks re-derive their own default when only the base slot is set and the per-state ones are not. After theming a property, grep for call sites setting it directly, and set every state the component can be in — not just the default.
+- **A bare style object handed to a component theme replaces the slot it stands in rather than tinting it**: passing something like `TextStyle(color: x)` drops font, size and spacing, because the component installs it wholesale instead of merging. Derive from the real slot with `copyWith` so only the intended property changes.
+
 ## Contracts & tests
 
 - API responses match the documented contract (schema/spec); every status code is covered

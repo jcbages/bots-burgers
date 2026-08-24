@@ -53,7 +53,7 @@ BASH_EDITED="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message
     | .input.command // empty' "$TRANSCRIPT" 2>/dev/null \
   | grep -E "(sed -i|perl -[a-z]*i|[[:space:]]tee[[:space:]]|apply_patch|>>?[[:space:]]*[^[:space:]|&;]+\.[a-z]+)" \
   | grep -oE '[A-Za-z0-9_./-]+\.(rb|erb|js|jsx|ts|tsx|mjs|cjs|vue|svelte|py|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|scss|css|sql|dart)' \
-  | grep -vE '^/?(tmp|private/tmp|var/folders)/|/scratchpad/|/node_modules/|^lib/' \
+  | grep -vE '^/?(tmp|private/tmp|var/folders)/|/scratchpad/|/node_modules/|functions/lib/' \
   || true)"
 
 [ -n "$EDITED" ] || [ -n "$BASH_EDITED" ] || exit 0

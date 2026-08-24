@@ -34,6 +34,15 @@ hook_feedback='{"isMeta":true,"message":{"role":"user","content":"You were block
 command_stdout='{"message":{"role":"user","content":"<local-command-stdout>reply `skip dod` to bypass it for a session</local-command-stdout>"}}'
 malformed='{"message":{"role":"user","content":"truncated'
 
+# Auto mode edits source through Bash, which Edit/Write-only gating never saw.
+bash_heredoc='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > app/lib/models/streak.dart <<EOF\nclass Streak {}\nEOF"}}]}}'
+bash_sed='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"sed -i .bak s/foo/bar/ server/src/guards.ts"}}]}}'
+bash_tee='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"echo x | tee lib/theme/tokens.dart"}}]}}'
+bash_read='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat app/lib/models/streak.dart"}}]}}'
+bash_grep='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"grep -rn Streak app/lib/models/streak.dart"}}]}}'
+bash_doc='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > README.md <<EOF\nhi\nEOF"}}]}}'
+bash_scratch='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > /tmp/scratch/probe.ts <<EOF\nx\nEOF"}}]}}'
+
 passed=0
 failed=0
 
@@ -76,6 +85,16 @@ expect BLOCK "hook feedback (isMeta) quoting it"  "$edit_src" "$hook_feedback"
 expect BLOCK "command stdout quoting it"          "$edit_src" "$command_stdout"
 expect BLOCK "an assistant turn quoting it"       "$edit_src" "$assistant_skip"
 expect BLOCK "a tool_result quoting it"           "$edit_src" "$tool_result_skip"
+
+echo "== Bash-written source counts as an edit (auto mode's real path) =="
+expect BLOCK "heredoc into a .dart file"          "$bash_heredoc"
+expect BLOCK "sed -i on a .ts file"               "$bash_sed"
+expect BLOCK "tee into a .dart file"              "$bash_tee"
+expect PASS  "reading a source file is not an edit" "$bash_read"
+expect PASS  "grepping a source file is not an edit" "$bash_grep"
+expect PASS  "heredoc into README.md still passes" "$bash_doc"
+expect PASS  "scratchpad writes are not product code" "$bash_scratch"
+expect PASS  "Bash edit + tests + review satisfies" "$bash_heredoc" "$ran_flutter" "$skill_fisch"
 
 echo "== a malformed line must not void a scan =="
 expect PASS  "bypass survives a bad line before it" "$edit_src" "$malformed" "$user_skip"

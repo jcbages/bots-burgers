@@ -48,11 +48,20 @@ EDITED="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.cont
 # through Bash against 86 through Edit/Write, and nineteen sessions used Bash only, so
 # a gate watching Edit/Write alone was off for most of the work. Over-matching here is
 # the safe direction: the cost of a false positive is running the tests anyway.
-BASH_EDITED="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
+SRC_EXT='(rb|erb|js|jsx|ts|tsx|mjs|cjs|vue|svelte|py|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|scss|css|sql|dart)'
+
+BASH_CMDS="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
     | select(.type=="tool_use" and .name=="Bash")
-    | .input.command // empty' "$TRANSCRIPT" 2>/dev/null \
-  | grep -E "(sed -i|perl -[a-z]*i|[[:space:]]tee[[:space:]]|apply_patch|>>?[[:space:]]*[^[:space:]|&;]+\.[a-z]+)" \
-  | grep -oE '[A-Za-z0-9_./-]+\.(rb|erb|js|jsx|ts|tsx|mjs|cjs|vue|svelte|py|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|scss|css|sql|dart)' \
+    | .input.command // empty' "$TRANSCRIPT" 2>/dev/null || true)"
+
+# Only the *write target* counts. Matching every source-looking path in the command
+# flags reads, greps, and a command quoted inside another command's heredoc.
+BASH_EDITED="$( { printf '%s\n' "$BASH_CMDS" \
+      | grep -oE "(>>?|[[:space:]]tee([[:space:]]+-a)?)[[:space:]]*[A-Za-z0-9_./-]+\.$SRC_EXT([[:space:]]|$)" \
+      | grep -oE "[A-Za-z0-9_./-]+\.$SRC_EXT"
+    printf '%s\n' "$BASH_CMDS" \
+      | grep -E '(sed -i|perl -[a-z]*i)' | awk '{print $NF}' | grep -E "\.$SRC_EXT$"
+  } 2>/dev/null \
   | grep -vE '^/?(tmp|private/tmp|var/folders)/|/scratchpad/|/node_modules/|functions/lib/' \
   || true)"
 
@@ -61,7 +70,7 @@ BASH_EDITED="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message
 TESTS_RAN="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
     | select(.type=="tool_use" and .name=="Bash")
     | .input.command // empty' "$TRANSCRIPT" 2>/dev/null \
-  | grep -E '(^|[[:space:]])(bin/ci|(bin/|bundle exec )?rails test|(bin/|bundle exec )?rspec|(npm|pnpm|yarn)( run)? test|jest|vitest|pytest|go test|cargo test|mix test|gradle( |w )test|mvn test|flutter test|dart test)' \
+  | grep -E '(^|[[:space:]])(bin/ci|(bin/|bundle exec )?rails test|(bin/|bundle exec )?rspec|(npm|pnpm|yarn)( run)? test|jest|vitest|pytest|go test|cargo test|mix test|gradle( |w )test|mvn test|flutter test|dart test|bats|[A-Za-z0-9_./-]*_test\.sh|[A-Za-z0-9_./-]*/tests?/[A-Za-z0-9_./-]+\.sh)' \
   || true)"
 
 REVIEW_RAN="$(jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?

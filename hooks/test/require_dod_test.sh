@@ -41,6 +41,9 @@ bash_tee='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"comm
 bash_read='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat app/lib/models/streak.dart"}}]}}'
 bash_grep='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"grep -rn Streak app/lib/models/streak.dart"}}]}}'
 bash_doc='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > README.md <<EOF\nhi\nEOF"}}]}}'
+bash_quoted='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"python3 - <<PY\nfixture = \"cat > app/lib/models/streak.dart\"\nPY"}}]}}'
+ran_shell='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"hooks/test/require_dod_test.sh"}}]}}'
+ran_bats='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"bats test/"}}]}}'
 bash_scratch='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > /tmp/scratch/probe.ts <<EOF\nx\nEOF"}}]}}'
 
 passed=0
@@ -95,6 +98,11 @@ expect PASS  "grepping a source file is not an edit" "$bash_grep"
 expect PASS  "heredoc into README.md still passes" "$bash_doc"
 expect PASS  "scratchpad writes are not product code" "$bash_scratch"
 expect PASS  "Bash edit + tests + review satisfies" "$bash_heredoc" "$ran_flutter" "$skill_fisch"
+expect PASS  "a path merely quoted inside a heredoc" "$bash_quoted"
+
+echo "== a shell-script suite is a test runner too =="
+expect PASS  "*_test.sh satisfies the test step"   "$bash_heredoc" "$ran_shell" "$skill_fisch"
+expect PASS  "bats satisfies the test step"        "$bash_heredoc" "$ran_bats" "$skill_fisch"
 
 echo "== a malformed line must not void a scan =="
 expect PASS  "bypass survives a bad line before it" "$edit_src" "$malformed" "$user_skip"

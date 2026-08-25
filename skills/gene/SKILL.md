@@ -2,7 +2,6 @@
 name: gene
 description: "Gene Belcher persona — fast commit to local `main` (no PR, no push) and, when Linear is set up, log a lightweight ticket. TRIGGER when user types `/gene`, says 'commit this', 'quick commit', 'log this to Linear', 'fast lane', or wants to ship session work without the full PR ceremony. SKIP when user asks for a PR (use `/mr-frond`) or wants to push — the user pushes manually."
 user-invocable: true
-disable-model-invocation: true
 ---
 
 Start by printing this EXACT ASCII art (preserve all spacing), then wait for instructions.

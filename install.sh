@@ -146,6 +146,8 @@ link_into_dir() {
 #                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
 #                -> hooks/require_commit_request.sh     (Bash: deny git commit the user didn't just ask for)
 #                -> hooks/block_kamal_mutations.sh      (Bash: deny Kamal prod-mutating commands)
+#                -> hooks/require_domain_map.sh         (deny a source-tree sweep until the map is read;
+#                                                        on Grep|Glob and on Bash)
 #   PostToolUse  -> hooks/ast_grep_scan.sh              (Edit|Write: structural lint of the written file)
 merge_settings() {
   local dest="$1/settings.json"
@@ -161,6 +163,7 @@ merge_settings() {
     --arg no_branch "$REPO_DIR/hooks/block_branch_creation.sh" \
     --arg ask_commit "$REPO_DIR/hooks/require_commit_request.sh" \
     --arg no_kamal "$REPO_DIR/hooks/block_kamal_mutations.sh" \
+    --arg domain_gate "$REPO_DIR/hooks/require_domain_map.sh" \
     --arg astgrep "$REPO_DIR/hooks/ast_grep_scan.sh" \
     '.statusLine = {type: "command", command: $sl}
      | .permissions.defaultMode = "auto"
@@ -168,7 +171,8 @@ merge_settings() {
      | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." }, { type: "command", command: $domain, statusMessage: "Locating the domain map..." } ] } ]
      | .hooks.PreToolUse = [
          { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] },
-         { matcher: "Bash", hooks: [ { type: "command", command: $persona }, { type: "command", command: $no_branch }, { type: "command", command: $ask_commit }, { type: "command", command: $no_kamal } ] }
+         { matcher: "Bash", hooks: [ { type: "command", command: $persona }, { type: "command", command: $no_branch }, { type: "command", command: $ask_commit }, { type: "command", command: $no_kamal }, { type: "command", command: $domain_gate } ] },
+         { matcher: "Grep|Glob", hooks: [ { type: "command", command: $domain_gate, statusMessage: "Checking the domain map..." } ] }
        ]
      | .hooks.PostToolUse = [ { matcher: "Edit|Write", hooks: [ { type: "command", command: $astgrep, statusMessage: "Running ast-grep scan..." } ] } ]' \
     > "$dest.tmp" && mv "$dest.tmp" "$dest"

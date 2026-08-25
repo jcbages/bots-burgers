@@ -6,6 +6,10 @@
 #
 set -u
 
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=hooks/lib/bash_command.sh
+. "$REPO_DIR/lib/bash_command.sh"
+
 INPUT="$(cat)"
 CWD="${CLAUDE_PROJECT_DIR:-$(printf '%s' "$INPUT" | jq -r '.cwd // empty')}"
 [ -n "$CWD" ] && [ -d "$CWD" ] || exit 0
@@ -13,21 +17,12 @@ CWD="${CLAUDE_PROJECT_DIR:-$(printf '%s' "$INPUT" | jq -r '.cwd // empty')}"
 ROOT="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)" || exit 0
 [ -n "$ROOT" ] || exit 0
 
-MAP=""
-for candidate in "$ROOT/PROJECT_DOMAIN.md" "$ROOT/.claude/PROJECT_DOMAIN.md"; do
-  [ -f "$candidate" ] && MAP="$candidate" && break
-done
-
-# A project may name its own map in CLAUDE.md (e.g. Kerni's KERNI_DOMAIN.md).
-if [ -z "$MAP" ] && [ -f "$ROOT/CLAUDE.md" ]; then
-  NAMED="$(grep -oE '[A-Z_]+_DOMAIN\.md' "$ROOT/CLAUDE.md" | head -1)"
-  [ -n "$NAMED" ] && [ -f "$ROOT/$NAMED" ] && MAP="$ROOT/$NAMED"
-fi
+MAP="$(domain_map_path "$ROOT")"
 
 if [ -n "$MAP" ]; then
-  CONTEXT="Domain map: $MAP. Read it before any Grep/Glob/Read sweep of the source tree — it names the file you want. If this session materially changes what it describes, update it in the same change."
+  CONTEXT="Domain map: $MAP. Read it before sweeping the source tree — it names the file you want. require_domain_map.sh denies the first Grep/Glob/recursive-grep until you have, so reading it now is cheaper than being turned back. If this session materially changes what it describes, update it in the same change."
 else
-  CONTEXT="No domain map exists in $ROOT. Before the first Grep/Glob/Read sweep of the source tree, invoke /project-domain to bootstrap PROJECT_DOMAIN.md — orientation you skip here is paid back as blind searching for the rest of the session. Skip only for docs-only or pure infra/CI work."
+  CONTEXT="No domain map exists in $ROOT. Invoke /project-domain to bootstrap PROJECT_DOMAIN.md before sweeping the source tree — orientation you skip here is paid back as blind searching for the rest of the session, and require_domain_map.sh denies the first sweep until it exists. Skip only for docs-only or pure infra/CI work, which the user waives with 'skip domain map'."
 fi
 
 jq -n --arg ctx "$CONTEXT" '{

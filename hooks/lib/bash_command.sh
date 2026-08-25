@@ -78,23 +78,67 @@ git_working_dir() {
 }
 
 # The provenance filter every transcript scan needs. Role is not provenance: hook
-# feedback, subagent reports, slash-command echoes, command output and a gate's own
-# denial are all stored with role "user". A gate that trusts the role licenses
-# itself off its own message. One copy, because two drift.
+# feedback, subagent reports, command output and a gate's own denial are all stored
+# with role "user". A gate that trusts the role licenses itself off its own message.
+# One copy, because two drift.
+#
+# Typing a slash command IS the user speaking, so an echo of one is kept — but only
+# through the command it names and the arguments they typed. Nothing else the echo
+# carries survives, so a skill whose instructions merely discuss an action can never
+# be read as the user asking for it.
 GENUINE_USER_TEXT='fromjson? // empty
   | select(.message.role=="user" and .isMeta != true)
   | ( if (.message.content|type)=="string" then .message.content
       else ([.message.content[]? | select(.type=="text") | .text] | join("\n")) end )
-  | select(test("^[[:space:]]*<(task-notification|command-name|command-message|local-command-|system-reminder)") | not)
+  | select(test("^[[:space:]]*<(task-notification|local-command-|system-reminder)") | not)
   | select(test("SYSTEM NOTIFICATION - NOT USER INPUT") | not)
+  | ( if test("^[[:space:]]*<command-(name|message)>")
+      then [ scan("<command-(?:name|args)>([^<]*)</command-(?:name|args)>") | .[0] ] | join(" ")
+      else . end )
   | select(length > 0)'
 
-# The user asking for a commit, and only the user. Composed here rather than at the
-# call site because every layer of shell quoting around a jq regex is a place to
-# lose a backslash.
-COMMIT_CONSENT_FILTER="$GENUINE_USER_TEXT
-  | select(test(\"Explicit-commit gate\") | not)
-  | select(test(\"(?i)(\\\\bcommit\\\\b|\\\\bamend\\\\b|/gene\\\\b|\\\\bship it\\\\b|\\\\bland (it|this)\\\\b)\"))"
+# What the user says when they want a commit. A grep pattern rather than a jq one:
+# every layer of shell quoting around a regex is a place to lose a backslash, and the
+# caller greps. The caller also decides *which* turn to match — only their latest, so
+# a request spends itself instead of standing for the rest of the session.
+COMMIT_REQUEST_RE='(\bcommit\b|\bamend\b|/gene\b|\bship it\b|\bland (it|this)\b)'
+
+# The paths a search command will actually visit, one per line. Position is what
+# separates them from the pattern: a content searcher spends its first non-flag word on
+# what to match and the rest on where, so `grep -rn "/tmp/" .` yields "." and not
+# "/tmp/". A caller that flattens the two together inherits both meanings.
+sweep_paths() {
+  _segments | awk '
+    {
+      tool = 0
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^([A-Za-z0-9_.\/-]*\/)?(grep|rg|ag|fd|find)$/) { tool = i; break }
+      }
+      if (tool == 0) next
+      # find and fd take a path first; grep, rg and ag spend a word on the pattern.
+      pending = ($tool ~ /(find|fd)$/) ? 0 : 1
+      for (i = tool + 1; i <= NF; i++) {
+        if (substr($i, 1, 1) == "-") continue
+        if (pending) { pending = 0; continue }
+        print $i
+      }
+    }'
+}
+
+# Where a project keeps its domain map, looked up in the order the /project-domain
+# skill looks: the repo root, then .claude/, then whatever name the project's
+# CLAUDE.md gives it (Kerni calls its own KERNI_DOMAIN.md — honor that rather than
+# creating a second map). Empty output means the project has no map yet.
+domain_map_path() { # <repo root>
+  local root="$1" candidate named
+  for candidate in "$root/PROJECT_DOMAIN.md" "$root/.claude/PROJECT_DOMAIN.md"; do
+    [ -f "$candidate" ] && { printf '%s' "$candidate"; return 0; }
+  done
+  [ -f "$root/CLAUDE.md" ] || return 0
+  named="$(grep -oE '[A-Z_]+_DOMAIN\.md' "$root/CLAUDE.md" | head -1)"
+  [ -n "$named" ] && [ -f "$root/$named" ] && printf '%s' "$root/$named"
+  return 0
+}
 
 # Is this path product source? Used by the gates that must treat an Edit tool call
 # and a Bash redirect to the same file as the same act.

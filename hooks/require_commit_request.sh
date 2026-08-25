@@ -38,9 +38,7 @@ TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty')"
 LAST_SPOKEN="$(jq -rR "$GENUINE_USER_TEXT
   | select(test(\"Explicit-commit gate\") | not)" "$TRANSCRIPT" 2>/dev/null | tail -1)"
 
-printf '%s' "$LAST_SPOKEN" \
-  | grep -qiE '(\bcommit\b|\bamend\b|/gene\b|\bship it\b|\bland (it|this)\b)' \
-  && exit 0
+printf '%s' "$LAST_SPOKEN" | grep -qiE "$COMMIT_REQUEST_RE" && exit 0
 
 REASON="Explicit-commit gate (AGENTS.md): the user has not asked for a commit since the last one. Committing is theirs to trigger.
 

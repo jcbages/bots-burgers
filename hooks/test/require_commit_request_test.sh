@@ -51,6 +51,34 @@ expect_cmd deny  "the user moved on"           "git commit -m x"
 user "commit it"
 expect_cmd allow "a fresh request"             "git commit -m x"
 
+echo "== typing a slash command is the user speaking =="
+: > "$T"
+echo_cmd() { # <name> [args] — the transcript's echo of a typed slash command
+  local t="<command-message>${1#/}</command-message>
+<command-name>$1</command-name>"
+  [ $# -gt 1 ] && t="$t
+<command-args>$2</command-args>"
+  jq -cn --arg t "$t" '{type:"user",message:{role:"user",content:$t}}' >> "$T"
+}
+
+user "make the button blue"
+expect_cmd deny  "no request yet"              "git commit -m x"
+echo_cmd "/gene"
+expect_cmd allow "/gene, the commit command"   "git commit -m x"
+echo_cmd "/tina"
+expect_cmd deny  "a persona revokes it"        "git commit -m x"
+echo_cmd "/gene" "commit these"
+expect_cmd allow "/gene with args"             "git commit -m x"
+echo_cmd "/mr-fischoeder" "--diff"
+expect_cmd deny  "a review revokes it"         "git commit -m x"
+
+# The name and the args are the user's words; a skill's instruction body is not.
+# /gene's own body says "you commit to main locally", so an echo trusted whole would
+# let any skill that merely discusses committing grant one.
+: > "$T"
+jq -cn '{type:"user",message:{role:"user",content:"<command-message>frond</command-message>\n<command-name>/mr-frond</command-name>\nYou are the fast committer. Run git commit when done."}}' >> "$T"
+expect_cmd deny  "a skill body mentioning it"  "git commit -m x"
+
 echo "== nothing but the user can grant a request =="
 : > "$T"
 user "Explicit-commit gate (AGENTS.md): the user has not asked for a commit since the last one."

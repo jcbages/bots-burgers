@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# What THIS session changed, in a working tree many sessions share.
+#
+# `git status` there shows everyone's work at once, which makes it useless for
+# the one question you ask before committing: what am *I* about to land? This
+# answers only that, from the ledger the session hook keeps.
+#
+#   mine            this session's diff
+#   mine --files    just the paths
+#   mine --stat     diffstat
+#
+set -u
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=hooks/lib/ledger.sh
+. "$DIR/hooks/lib/ledger.sh"
+
+ledger_dir >/dev/null 2>&1 || { echo "mine: not a git repo, or no session id" >&2; exit 1; }
+
+paths="$(ledger_paths)"
+if [ -z "$paths" ]; then echo "mine: this session has changed nothing"; exit 0; fi
+
+case "${1:-}" in
+  --files) printf '%s\n' "$paths"; exit 0 ;;
+esac
+
+contested="$(ledger_contested)"
+[ -n "$contested" ] && {
+  echo "⚠ could not be separated from another session's edits (will not be committed):"
+  printf '   %s\n' $contested; echo
+}
+
+d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
+while IFS= read -r p; do
+  [ -n "$p" ] || continue
+  IFS=$'\t' read -r origin shadow _ <<< "$(ledger_get "$p")"
+  _ledger_blob_to "$origin" "$d/a"; _ledger_blob_to "$shadow" "$d/b"
+  case "${1:-}" in
+    --stat) printf '%s | %s\n' "$p" "$(diff -u "$d/a" "$d/b" | grep -cE '^[+-][^+-]') lines" ;;
+    *)      diff -u -L "a/$p" -L "b/$p" "$d/a" "$d/b" ;;
+  esac
+done <<< "$paths"
+exit 0

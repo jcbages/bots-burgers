@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+#
+# Commit exactly this session's changes, and nothing another session wrote.
+#
+# For each file the session ledger tracks, `origin -> shadow` is this session's
+# contribution; replaying that onto HEAD's current content is its commit. The
+# tree is assembled in a private index, so .git/index — shared with every other
+# agent in this tree — is never written until the commit has landed. The ref
+# moves with a compare-and-swap, so a session that committed meanwhile is a loud
+# failure rather than a race.
+#
+#   commit-mine -m "Add the thing"          commit everything this session changed
+#   commit-mine -m "..." path/a path/b      only those paths
+#   commit-mine --dry-run                   show what would land
+#
+set -u
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=hooks/lib/ledger.sh
+. "$DIR/hooks/lib/ledger.sh"
+
+MSG=""; DRY=0; ONLY=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -m|--message)  MSG="$2"; shift 2 ;;
+    -F|--file)     MSG="$(cat "$2")"; shift 2 ;;
+    -n|--dry-run)  DRY=1; shift ;;
+    -h|--help)     sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*)            echo "commit-mine: unknown flag $1" >&2; exit 2 ;;
+    *)             ONLY+=("$1"); shift ;;
+  esac
+done
+
+ledger_dir >/dev/null 2>&1 || { echo "commit-mine: not a git repo, or no session id" >&2; exit 1; }
+base="$(git rev-parse -q --verify HEAD)" || { echo "commit-mine: no commits yet" >&2; exit 1; }
+
+paths="$(ledger_paths)"
+[ ${#ONLY[@]} -gt 0 ] && paths="$(printf '%s\n' "${ONLY[@]}")"
+[ -n "$paths" ] || { echo "commit-mine: this session has changed nothing"; exit 0; }
+
+gd="$(git rev-parse --absolute-git-dir)"
+idx="$gd/commit-mine-index.$$"
+export GIT_INDEX_FILE="$idx"
+git read-tree "$base"
+
+landing=(); skipped=()
+while IFS= read -r p; do
+  [ -n "$p" ] || continue
+  entry="$(ledger_get "$p")"
+  [ -n "$entry" ] || { skipped+=("$p — not this session's"); continue; }
+  IFS=$'\t' read -r origin shadow status <<< "$entry"
+  [ "$status" = contested ] && { skipped+=("$p — tangled with another session's edit"); continue; }
+
+  if [ "$shadow" = "-" ]; then
+    git update-index --force-remove -- "$p" && landing+=("$p"); continue
+  fi
+  head_blob="$(git rev-parse -q --verify "$base:$p" 2>/dev/null)" || head_blob="-"
+  if [ "$head_blob" = "$origin" ]; then
+    merged="$shadow"                                   # HEAD has not moved under us
+  elif ! merged="$(ledger_merge3 "$head_blob" "$origin" "$shadow")"; then
+    skipped+=("$p — conflicts with what is already committed"); continue
+  fi
+  [ "$merged" = "$head_blob" ] && { skipped+=("$p — already in HEAD"); continue; }
+  mode="$(git ls-tree "$base" -- "$p" 2>/dev/null | awk '{print $1}')"
+  [ -n "$mode" ] || { mode=100644; [ -x "$p" ] && mode=100755; }
+  git update-index --add --cacheinfo "$mode,$merged,$p" && landing+=("$p")
+done <<< "$paths"
+
+tree="$(git write-tree)"
+unset GIT_INDEX_FILE; rm -f "$idx"
+
+report() {
+  [ ${#landing[@]} -gt 0 ] && { echo "landing:"; printf '  %s\n' "${landing[@]}"; }
+  [ ${#skipped[@]} -gt 0 ] && { echo "skipped:"; printf '  %s\n' "${skipped[@]}"; }
+  return 0
+}
+
+[ ${#landing[@]} -gt 0 ] || { echo "commit-mine: nothing to commit"; report; exit 0; }
+[ "$DRY" = 1 ] && { echo "(dry run)"; report; git diff --stat "$base" "$tree"; exit 0; }
+[ -n "$MSG" ] || { echo "commit-mine: a message is required (-m)" >&2; exit 2; }
+
+sha="$(printf '%s\n' "$MSG" | git commit-tree "$tree" -p "$base")"
+if ! git update-ref -m "commit: $(printf '%s' "$MSG" | head -1)" HEAD "$sha" "$base" 2>/dev/null; then
+  echo "commit-mine: HEAD moved while this commit was being built (another session landed one)." >&2
+  echo "             Nothing was committed. Re-run — the ledger is unchanged." >&2
+  exit 1
+fi
+
+ledger_drop "${landing[@]}"
+git reset -q -- "${landing[@]}" 2>/dev/null || true
+echo "committed $(git rev-parse --short HEAD)  $(printf '%s' "$MSG" | head -1)"
+report

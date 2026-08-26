@@ -64,6 +64,16 @@ source_write_targets() {
     || true
 }
 
+# The spellings that write history. `git commit-tree` builds a commit and
+# `git update-ref` moves the branch onto it, so a gate matching the bare word
+# `commit` waves the two-step plumbing form through untouched. One copy, because
+# two drift.
+GIT_COMMIT_VERB='(commit(-tree)?|update-ref)'
+_GIT_COMMIT="([A-Za-z0-9_./-]*/)?git[[:space:]]+([^;&|]*[[:space:]])?$GIT_COMMIT_VERB"
+# `commit-mine` writes history too — it is the sanctioned way to do it here, which
+# is exactly why it must not be the way around the gate.
+GIT_COMMIT_RE="(^|[;&|[:space:]])($_GIT_COMMIT|([A-Za-z0-9_./-]*/)?commit-mine)([[:space:]]|\$)"
+
 # Where a git invocation in this command actually runs: an explicit -C, else a
 # directory cd'd into beforehand, else empty (meaning the session's own cwd). Text
 # elsewhere in the command — a commit message, a later clause — is not a location.
@@ -73,7 +83,7 @@ git_working_dir() {
   dir="$(printf '%s' "$cmd" | grep -oE 'git[[:space:]]+-C[[:space:]]+[^[:space:]]+' | head -1 | awk '{print $NF}')"
   [ -n "$dir" ] && { printf '%s' "$dir"; return; }
   local before
-  before="$(printf '%s' "$cmd" | sed -E 's/([A-Za-z0-9_./-]*\/)?git[[:space:]]+([^;&|]*[[:space:]])?commit.*//')"
+  before="$(printf '%s' "$cmd" | sed -E "s#([A-Za-z0-9_./-]*/)?git[[:space:]]+([^;&|]*[[:space:]])?$GIT_COMMIT_VERB.*##")"
   printf '%s' "$before" | grep -oE '(^|[;&|(][[:space:]]*)cd[[:space:]]+[^[:space:]]+' | tail -1 | awk '{print $NF}'
 }
 

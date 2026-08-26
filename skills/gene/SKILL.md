@@ -50,49 +50,37 @@ You are the fast lane. No PRs, no branches, no ceremony. You commit to main loca
 
 ## Process
 
-### 1. Scan Session Changes (FAST)
-
-Look at the conversation history to understand what was worked on. Then audit uncommitted changes:
+### 1. Review What This Session Changed (FAST)
 
 ```bash
-git status
-git diff --name-only
+bin/mine --files      # the paths this session touched
+bin/mine              # this session's diff — only its own lines
 ```
 
-Categorize every changed file into:
-- **SESSION** -- 100% session work, safe to commit
-- **MIXED** -- session work interleaved with unrelated changes in the same file
-- **UNRELATED** -- no session work in this file, do not touch
+This is a **record, not a reconstruction**. The session ledger hook snapshots each
+file before and after every tool call, so a line another agent wrote is in both
+snapshots and never enters this session's shadow. Gene does not classify files by
+reading the conversation, and does not hand-split hunks — that guessing is what put
+other people's work into commits.
 
-**The golden rule: never modify working-tree files.** Parallel agents may be mid-edit in this working tree. No `git stash`, no `git checkout -- <file>`, no `git reset --hard`, no editing a file to drop unrelated lines, no "snapshot → edit → restore" dance. Staging is fine; mutating the working copy is not.
+`git status` in this tree shows every session's work at once. It is not the question
+being asked; `bin/mine` is.
 
-Handle each bucket:
+**The golden rule: never modify working-tree files, and never write the shared index.**
+Other agents are mid-edit here, and `.git/index` is one file all of them share — a
+`git add` can be swept into *their* commit a second later, or theirs into Gene's. So:
+no `git stash`, no `git checkout -- <file>`, no `git reset --hard`, no editing a file
+to drop someone else's lines. `bin/commit-mine` builds its tree in a private index and
+touches the shared one only after the commit has landed.
 
-- **SESSION files** → `git add <file>` (whole file).
-- **MIXED files** → stage only the session hunks via `git apply --cached` (see below). Index-only; working tree stays exactly as the user left it.
-- **UNRELATED files** → do not touch.
-
-#### Staging hunks from a MIXED file (`git apply --cached`)
-
-1. Dump the full diff to a patch file:
-   ```bash
-   git diff -- path/to/file.rb > /tmp/gene_full.patch
-   ```
-2. Read `/tmp/gene_full.patch` and write a filtered patch (`/tmp/gene_session.patch`) containing ONLY the session hunks. Keep the full `diff --git` / `index` / `---` / `+++` header lines verbatim, then include only the `@@ ... @@` hunks that belong to this session. Preserve every `@@` header and line prefix exactly (` `, `+`, `-`) — `git apply` is strict.
-3. Stage the filtered patch into the index only:
-   ```bash
-   git apply --cached /tmp/gene_session.patch
-   ```
-4. Verify: `git diff --cached -- path/to/file.rb` shows only the session hunks; `git diff -- path/to/file.rb` still shows the unrelated hunks untouched in the working tree. If either is off, `git reset HEAD -- path/to/file.rb` (index-only, safe) and skip the file.
-
-If Gene can't confidently split the hunks (session and unrelated edits overlap on the same lines), **skip the file** and tell the user to split it in their editor's gutter UI and re-run, or use `/mr-frond` for a full worktree extraction.
-
-Present a quick summary of SESSION / MIXED / UNRELATED / un-splittable files. Keep it fast.
+If `bin/mine` reports paths it **could not separate from another session's edits**,
+those are contested: they will not be committed. Name them in the report and leave
+them — two sessions rewrote the same lines, and only their authors can untangle that.
 
 ### 1b. Definition-of-Done Spot-Check (FAST, but not skippable)
 
 - **Tests ran green on the touched code?** If there's no evidence in the session, run the touched test files now (via `ci.test_command`). Red → stop and hand back to the persona; Gene does not commit red code.
-- **Fresh-eyes review happened?** If not, spawn ONE fresh-context review subagent on the staged diff, scoped to the bug checklist (the built-in `~/.claudita/skills/_shared/bug-checklist.md`, plus any the project names) and the feature's intent. Fix real findings before committing (or hand back if they're big).
+- **Fresh-eyes review happened?** If not, spawn ONE fresh-context review subagent on `bin/mine` (this session's diff), scoped to the bug checklist (the built-in `~/.claudita/skills/_shared/bug-checklist.md`, plus any the project names) and the feature's intent. Fix real findings before committing (or hand back if they're big).
 
 The express train still has brakes.
 
@@ -116,19 +104,31 @@ Check if a Linear ticket was mentioned during the session.
 
 This is a fast log entry, not a Linda-grade ticket.
 
-### 3. Commit to Main
-
-The index already contains MIXED hunks staged via `git apply --cached`. Add the whole SESSION files by name and commit. **Never** `git add .` / `git add -A` (sweeps UNRELATED files) and **never** `git add -p` (interactive).
+### 3. Commit in One Pass
 
 ```bash
-git add path/to/session_file_a.rb path/to/session_file_b.rb
-git commit -m "$(cat <<'EOF'
-[<PREFIX>-XX] Short description of what was done
-
-Co-Authored-By: <the co-author trailer this session specifies>
-EOF
-)"
+bin/commit-mine --dry-run                                   # what would land
+bin/commit-mine -m "[<PREFIX>-XX] Short description of what was done"
 ```
+
+`commit-mine` replays this session's `origin -> shadow` onto HEAD's current content,
+assembles the tree in a private index, and moves the ref with a compare-and-swap. One
+pass, and `.git/index` is never written until it has landed.
+
+- **Read `--dry-run` first.** It prints what lands and what is skipped, and skipping is
+  never silent: contested files, files that conflict with what is already committed,
+  and files already in HEAD each say so.
+- **A session that committed while this one was building** makes the ref move fail, and
+  `commit-mine` says so and commits nothing. Re-run it — the ledger is untouched.
+- **HEAD moving underneath is normal and is absorbed**, because the replay is a 3-way
+  merge rather than a patch: another session's commit shifts the line numbers and the
+  merge follows them.
+- **No ledger?** A session that ran before the hook was installed has nothing recorded,
+  and `bin/mine` says so. Do not fall back to guessing: commit by naming paths
+  (`git commit -m "..." -- <paths>`), which ignores everything else staged, and say in
+  the report that the split was by hand.
+- **Co-author trailer**: pass it in the message, e.g.
+  `-m "$(printf '%s\n\n%s' "[<PREFIX>-XX] ..." "Co-Authored-By: <the trailer this session specifies>")"`.
 
 **Commit message rules:**
 - Start with `[<PREFIX>-XX]` (the Linear ticket number) — omit the prefix entirely when Linear is unavailable

@@ -145,6 +145,9 @@ link_into_dir() {
 #                                                        on Edit|Write|MultiEdit and on Bash)
 #                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
 #                -> hooks/require_commit_request.sh     (Bash: deny git commit the user didn't just ask for)
+#                -> hooks/require_scoped_commit.sh      (Bash: deny a commit that sweeps the shared index)
+#                -> hooks/session_ledger.sh pre          (record this session's changes, before/after each
+#   PostToolUse  -> hooks/session_ledger.sh post          tool call, so it can commit exactly its own work)
 #                -> hooks/block_kamal_mutations.sh      (Bash: deny Kamal prod-mutating commands)
 #                -> hooks/require_domain_map.sh         (deny a source-tree sweep until /project-domain runs;
 #                                                        on Grep|Glob and on Bash)
@@ -162,19 +165,25 @@ merge_settings() {
     --arg persona "$REPO_DIR/hooks/require_persona.sh" \
     --arg no_branch "$REPO_DIR/hooks/block_branch_creation.sh" \
     --arg ask_commit "$REPO_DIR/hooks/require_commit_request.sh" \
+    --arg scoped_commit "$REPO_DIR/hooks/require_scoped_commit.sh" \
     --arg no_kamal "$REPO_DIR/hooks/block_kamal_mutations.sh" \
     --arg domain_gate "$REPO_DIR/hooks/require_domain_map.sh" \
     --arg astgrep "$REPO_DIR/hooks/ast_grep_scan.sh" \
+    --arg ledger "$REPO_DIR/hooks/session_ledger.sh" \
     '.statusLine = {type: "command", command: $sl}
      | .permissions.defaultMode = "auto"
      | .hooks.Stop = [ { hooks: [ { type: "command", command: $dod, statusMessage: "Checking Definition of Done..." }, { type: "command", command: $status } ] } ]
      | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." }, { type: "command", command: $domain, statusMessage: "Locating the domain map..." } ] } ]
      | .hooks.PreToolUse = [
          { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] },
-         { matcher: "Bash", hooks: [ { type: "command", command: $persona }, { type: "command", command: $no_branch }, { type: "command", command: $ask_commit }, { type: "command", command: $no_kamal }, { type: "command", command: $domain_gate } ] },
-         { matcher: "Grep|Glob", hooks: [ { type: "command", command: $domain_gate, statusMessage: "Checking the domain map..." } ] }
+         { matcher: "Bash", hooks: [ { type: "command", command: $persona }, { type: "command", command: $no_branch }, { type: "command", command: $ask_commit }, { type: "command", command: $scoped_commit }, { type: "command", command: $no_kamal }, { type: "command", command: $domain_gate } ] },
+         { matcher: "Grep|Glob", hooks: [ { type: "command", command: $domain_gate, statusMessage: "Checking the domain map..." } ] },
+         { matcher: "Bash|Edit|Write|NotebookEdit", hooks: [ { type: "command", command: ($ledger + " pre") } ] }
        ]
-     | .hooks.PostToolUse = [ { matcher: "Edit|Write", hooks: [ { type: "command", command: $astgrep, statusMessage: "Running ast-grep scan..." } ] } ]' \
+     | .hooks.PostToolUse = [
+         { matcher: "Edit|Write", hooks: [ { type: "command", command: $astgrep, statusMessage: "Running ast-grep scan..." } ] },
+         { matcher: "Bash|Edit|Write|NotebookEdit", hooks: [ { type: "command", command: ($ledger + " post") } ] }
+       ]' \
     > "$dest.tmp" && mv "$dest.tmp" "$dest"
   echo "  merge   $dest (statusLine + Stop/SessionStart/PreToolUse/PostToolUse hooks; existing keys preserved)"
 }

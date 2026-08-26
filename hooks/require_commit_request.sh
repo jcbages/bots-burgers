@@ -14,11 +14,10 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 INPUT="$(cat)"
 CMD="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' | strip_heredoc_bodies)"
 
-# Only gate commits. Amend and fixup count; every other git command is free. The
-# binary may be reached by path, so `git` is not necessarily the first word.
-printf '%s' "$CMD" \
-  | grep -qE '(^|[;&|[:space:]])([A-Za-z0-9_./-]*/)?git[[:space:]]+([^;&|]*[[:space:]])?commit([[:space:]]|$)' \
-  || exit 0
+# Only gate commits. Amend, fixup and the `commit-tree`/`update-ref` plumbing all
+# count — see GIT_COMMIT_RE. Every other git command is free. The binary may be
+# reached by path, so `git` is not necessarily the first word.
+printf '%s' "$CMD" | grep -qE "$GIT_COMMIT_RE" || exit 0
 
 # A commit in scratch space is a test fixture, not the user's history. This asks
 # where git actually runs — a commit *message* mentioning /tmp is not a location.
@@ -36,7 +35,7 @@ TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty')"
 # nothing to go stale and no clock to get wrong: the transcript already holds the
 # answer. Role is not provenance here, which is what GENUINE_USER_TEXT settles.
 LAST_SPOKEN="$(jq -rR "$GENUINE_USER_TEXT
-  | select(test(\"Explicit-commit gate\") | not)" "$TRANSCRIPT" 2>/dev/null | tail -1)"
+  | select(test(\"commit gate \\\\(AGENTS\\\\.md\\\\)\") | not)" "$TRANSCRIPT" 2>/dev/null | tail -1)"
 
 printf '%s' "$LAST_SPOKEN" | grep -qiE "$COMMIT_REQUEST_RE" && exit 0
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# PreToolUse hook: deny a sweep of the source tree until the project's domain map has
-# been read — or, when the project has none, until /project-domain has bootstrapped
-# one. AGENTS.md asks for the map first because orientation skipped here is paid back
-# as blind searching for the rest of the session.
+# PreToolUse hook: deny a sweep of the source tree until /project-domain has been
+# invoked — the skill that opens the project's domain map, or bootstraps one when the
+# project has none. AGENTS.md asks for it first because orientation skipped here is
+# paid back as blind searching for the rest of the session.
 #
 # The SessionStart hook already *names* the map. This is the half that makes it hold:
 # injected context is advice a session can walk straight past, the way a persona rule
@@ -65,12 +65,12 @@ MAP="$(domain_map_path "$ROOT")"
 
 # A filename is a regex full of dots. Escape it once, here, rather than trusting every
 # later grep -E to be the one that used -F.
+#
+# Searching *the map itself* — the pd:* anchor index the skill sends you to — is what
+# the gate asks for, never what it blocks. Searching the tree *for mentions of* the map
+# is an ordinary sweep, which is why this reads locations and not the pattern.
 if [ -n "$MAP" ]; then
   BASE_RE="$(basename "$MAP" | sed 's/[.[\*^$+?(){}|]/\\&/g')"
-
-  # Searching *the map itself* — the pd:* anchor index the skill sends you to — is what
-  # the gate asks for, never what it blocks. Searching the tree *for mentions of* the
-  # map is an ordinary sweep, which is why this reads locations and not the pattern.
   printf '%s' "$LOCATIONS" | grep -qE "(^|/)$BASE_RE\$" && exit 0
 fi
 
@@ -81,37 +81,39 @@ fi
 jq -rR "$GENUINE_USER_TEXT" "$TRANSCRIPT" 2>/dev/null \
   | grep -qiE 'skip domain[ -]?map|/project-domain' && exit 0
 
-# The model invoking the skill counts too — read from the parsed field, never by
-# grepping the transcript whole. This hook and its tests necessarily quote the very
-# strings they trigger on, so a session that writes them would unlock itself.
+# The skill, actually invoked — the only move that lifts this gate. Read from the
+# parsed field, never by grepping the transcript whole: this hook and its tests
+# necessarily quote the strings they trigger on, so a session that writes them would
+# unlock itself.
+#
+# Opening the map by hand deliberately does not count. When it did, the gate undid
+# itself: a session cat's the map, the gate falls away, and it goes back to one file
+# per call having never met the anchor index that would have told it which file to
+# open. The map is the content; the skill is the method for reaching into it and the
+# duty to leave it current, and only the skill carries those.
 jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
     | select(.type=="tool_use" and .name=="Skill") | .input.skill // empty' \
   "$TRANSCRIPT" 2>/dev/null | grep -qx 'project-domain' && exit 0
 
-# Has the map actually been opened? Only a tool call that *reads* it counts. Naming
-# the file in passing is not consulting it — not the SessionStart hook naming it in
-# injected context, and not a command that merely echoes the path.
+CALL='Invoke the project-domain skill now — Skill(skill: "project-domain"). The user can also type /project-domain.'
+WAIVER="Dropping to one cat per file instead is the blind searching this gate exists to stop, not a way past it. If this is docs-only or pure infra/CI work, the user can reply 'skip domain map'."
+
 if [ -n "$MAP" ]; then
-  jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
-      | select(.type=="tool_use") | (.input.file_path? // .input.path? // empty)' \
-    "$TRANSCRIPT" 2>/dev/null | grep -qE "(^|/)$BASE_RE\$" && exit 0
+  REASON="Domain-map gate (AGENTS.md): the project-domain skill has not run this session, so this sweep is blind searching.
 
-  # A reader, with the map as the file it is given — the last word of the command. That
-  # trailing anchor is what separates reading the map from searching for its name:
-  # `awk "/PROJECT_DOMAIN.md/ {print}" notes.txt` ends on notes.txt, and `sed -n
-  # 's/PROJECT_DOMAIN.md/x/p' f` ends on f. Neither one opened the map.
-  jq -rR 'fromjson? // empty | select(.message.content?) | .message.content[]?
-      | select(.type=="tool_use" and .name=="Bash") | .input.command // empty' \
-    "$TRANSCRIPT" 2>/dev/null | strip_heredoc_bodies | _segments \
-    | grep -qE "^[[:space:]]*(cat|head|tail|sed|awk|less|more)[[:space:]][^;&|]*[[:space:]][^[:space:]\"']*$BASE_RE[[:space:]]*\$" && exit 0
+$CALL
 
-  REASON="Domain-map gate (AGENTS.md): read $MAP before sweeping the source tree — it names the file you want, and orientation skipped here is paid back as blind searching for the rest of the session.
+It opens $MAP and works the pd:* anchor index that names the file you want. Nothing else lifts this gate — reading the map yourself does not, because the map is where things live and the skill is how to reach them and how to leave the map current.
 
-Read it (or invoke /project-domain), then run this search if you still need it. If this is docs-only or pure infra/CI work, the user can reply 'skip domain map'."
+$WAIVER"
 else
   REASON="Domain-map gate (AGENTS.md): $ROOT has no domain map, so there is nothing to orient from and this sweep is blind searching.
 
-Invoke /project-domain to bootstrap PROJECT_DOMAIN.md, then run this search if you still need it. If this is docs-only or pure infra/CI work, the user can reply 'skip domain map'."
+$CALL
+
+It bootstraps PROJECT_DOMAIN.md from the codebase, and that is what lifts this gate.
+
+$WAIVER"
 fi
 
 jq -n --arg r "$REASON" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'

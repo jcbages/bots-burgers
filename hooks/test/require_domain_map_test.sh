@@ -3,12 +3,15 @@
 # Tests for require_domain_map.sh — the domain-map PreToolUse gate.
 # Run: hooks/test/require_domain_map_test.sh
 #
-# The gate's whole value is that it turns advice into a stop. Four ways that quietly
-# breaks: the SessionStart hook names the map path in injected context, so any scan of
-# whole transcript lines counts it as read and the gate becomes a no-op; grepping the
-# map's own pd:* anchors is the thing it asks for, so blocking that deadlocks it; a
-# single-file grep is not blind searching; and a project with no map needs a different
-# instruction than one whose map merely went unread.
+# The gate's whole value is that it turns advice into a stop, and that it stops on the
+# skill rather than on the file. Five ways that quietly breaks: the SessionStart hook
+# names the map path in injected context, so any scan of whole transcript lines counts
+# it as read and the gate becomes a no-op; opening the map by hand looks like
+# compliance but leaves the session without the anchor-index method, so it must not
+# lift the gate; grepping the map's own pd:* anchors is the thing the skill asks for,
+# so blocking that deadlocks it; a single-file grep is not blind searching; and a
+# project with no map needs a different instruction than one whose map merely went
+# unread.
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="${DOMAIN_HOOK:-$DIR/../require_domain_map.sh}"
@@ -63,8 +66,9 @@ expect_bash deny  "ripgrep"                        "rg foo app/"
 expect_bash deny  "find"                           "find . -name '*.dart'"
 check deny "$(decide Glob "$(jq -cn '{pattern:"**/*.dart"}')")" "the Glob tool"
 
-says "has no domain map" "names the absence"
-says "/project-domain"   "points at the bootstrap skill"
+says "has no domain map"                 "names the absence"
+says "/project-domain"                   "points at the bootstrap skill"
+says 'Skill(skill: "project-domain")'    "names the call that lifts it"
 
 echo "== the recursion flag counts wherever it sits =="
 expect_bash deny  "-r after another flag"          "grep -n -r foo app/"
@@ -90,17 +94,21 @@ expect_bash allow "a git command"                  "git status"
 expect_bash allow "a sweep of scratch space"       "grep -rn foo /tmp/scratch/"
 expect_bash allow "a sweep of the CLI's own state" "grep -l foo ~/.claudita/projects/x.jsonl"
 
-echo "== once a map exists, reading it opens the gate =="
+echo "== once a map exists, only the skill opens the gate =="
 printf '# Map\n' > "$PROJECT/PROJECT_DOMAIN.md"
-expect_grep deny  "still shut before it is read"   "challenges"
+expect_grep deny  "still shut before the skill runs" "challenges"
 
-says "$PROJECT/PROJECT_DOMAIN.md" "names the map to read"
+says "$PROJECT/PROJECT_DOMAIN.md"        "names the map the skill opens"
+says 'Skill(skill: "project-domain")'    "names the call that lifts it"
 
 # Step 3 of the skill greps the map's own anchor index. Blocking that would leave the
 # gate demanding a thing it forbids.
 expect_bash allow "grepping the map's anchors"     "grep -n 'pd:' PROJECT_DOMAIN.md"
+
+# Reading the map is what the skill does first, not a substitute for it — a session
+# that cat's the map and calls it orientation is the one this gate was built for.
 read_file "$PROJECT/PROJECT_DOMAIN.md"
-expect_grep allow "after the map is read"          "challenges"
+expect_grep deny  "the map read without the skill" "challenges"
 
 echo "== injected context is not a read =="
 : > "$T"
@@ -139,9 +147,8 @@ expect_grep deny  "a lookalike filename"           "challenges"
 bash_tool 'jq -r .x t.jsonl | grep -F "PROJECT_DOMAIN.md"'
 expect_grep deny  "grepping for its name"          "challenges"
 
-echo "== but genuinely opening it does unlock =="
 bash_tool 'sed -n 1,40p PROJECT_DOMAIN.md'
-expect_grep allow "reading it through Bash"        "challenges"
+expect_grep deny  "opening the map through Bash"   "challenges"
 
 echo "== the user can waive it, and only the user =="
 : > "$T"

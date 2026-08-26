@@ -146,7 +146,7 @@ link_into_dir() {
 #                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
 #                -> hooks/require_commit_request.sh     (Bash: deny git commit the user didn't just ask for)
 #                -> hooks/block_kamal_mutations.sh      (Bash: deny Kamal prod-mutating commands)
-#                -> hooks/require_domain_map.sh         (deny a source-tree sweep until the map is read;
+#                -> hooks/require_domain_map.sh         (deny a source-tree sweep until /project-domain runs;
 #                                                        on Grep|Glob and on Bash)
 #   PostToolUse  -> hooks/ast_grep_scan.sh              (Edit|Write: structural lint of the written file)
 merge_settings() {

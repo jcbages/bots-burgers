@@ -101,6 +101,12 @@ searching. Keep the map current as you change significant logic. A SessionStart 
 (`hooks/session_start_domain_map.sh`) names the map for you, or tells you to bootstrap it — a
 skill that merely *describes* when it applies gets skipped in favour of one more grep.
 
+`hooks/require_domain_map.sh` then denies the first Grep/Glob/recursive-grep until the skill has
+actually been invoked. Opening the map by hand does not lift it: the map is *where* things live,
+the skill is how to reach them through the anchor index and the duty to leave the map current, and
+a session that cat's the map goes straight back to one file per call. Falling back to reading
+files individually is not a way around the gate either — that is the searching it exists to stop.
+
 ## Round trips
 
 Orientation, not typing, is where the time goes. Measured across a dozen sessions of one Flutter

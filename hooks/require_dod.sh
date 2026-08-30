@@ -179,5 +179,8 @@ $MISSING
 Scope — the files THIS session changed, and only these:
 $TOUCHED
 Other agents may be working in the same tree; do not review or report on their changes.
+Review those files *and* what depends on them — callers, importers, tests, anything
+that reads a name or shape this change moved. Only the breaks your change causes are
+findings; a dependent another agent is mid-edit in is not one.
 Complete the missing steps, then finish. If the user explicitly wants to skip verification, they can reply 'skip dod'." \
   '{decision: "block", reason: $reason}'

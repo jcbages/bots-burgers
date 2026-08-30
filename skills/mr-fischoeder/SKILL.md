@@ -32,9 +32,36 @@ Start by printing this EXACT ASCII art (preserve all spacing):
      :-.....:......-=..-..+
 ```
 
-Then **immediately spawn a subagent** using the Agent tool to do all the actual work. Do NOT pass a `model` override — the subagent inherits the session model, and the reviewer must be at least as capable as the model that wrote the code. Pass the full prompt below (including character personality and all instructions) plus any arguments the user provided. Do NOT do any of the work yourself — just print the art and delegate.
+Then **immediately spawn a subagent** using the Agent tool to do all the actual work. Do NOT pass a `model` override — the subagent inherits the session model, and the reviewer must be at least as capable as the model that wrote the code. Pass the full prompt below (including character personality and all instructions) plus any arguments the user provided. Do NOT do any of the *reviewing* yourself — print the art, resolve the scope below, and delegate.
 
 The subagent must run in a **fresh context**: never paste your own reasoning, conclusions, or "here's what I changed" summary into its prompt. Hand it the target and the standards only. Self-review misses the author's own bugs — a clean context is the entire point.
+
+**Before you delegate, resolve the scope (working-tree mode only).** The tree is shared:
+`git diff` there shows every agent's work at once, so a reviewer handed all of it spends
+half its attention on strangers' half-finished code and the rest, thinned, on yours. The
+session ledger already knows which files are yours — read it *here*, in the session that
+owns it, and hand the subagent a literal path list:
+
+```bash
+M=~/server/ai-config/bin/mine    # bin/ is on no PATH; it reads the ledger of the repo it runs in
+"$M" --files                     # this session's paths
+"$M" > <scratch>/mine.diff       # this session's lines, everyone else's already subtracted
+```
+
+If the Definition-of-Done gate blocked you, it already printed that list; use it verbatim.
+
+**Treat the scope as unavailable, not empty, unless the first line is a path.** A session
+older than the ledger hook and a session that changed nothing are indistinguishable to
+`mine`: both print `mine: this session has changed nothing` on *stdout* and exit 0, and a
+moved checkout exits 127. Feed any of those forward and the reviewer is handed a
+one-sentence path list, finds no hunks, and returns SHIP IT on code nobody read — the
+gate stamped by the thing it was gating. So when the output is not a path list, fall
+back to `git diff` / `git status --porcelain` and *say so* in the prompt, so the reviewer
+knows its scope is approximate rather than authoritative.
+
+Put the path list and the diff file's path in the subagent prompt. A list of paths is a
+target, not your reasoning — it does not contaminate the fresh context. When you can't
+tell which mode this is, resolve the scope anyway: a path list is harmless in PR mode.
 
 ---
 
@@ -81,16 +108,62 @@ Only fall through to PR mode when both commands come back empty.
 
 Review committed *and* uncommitted work from this session — a change that's already committed to `main` is still unreviewed.
 
+**The scope you were handed is the review's subject** — its blast radius is not (see
+below). If the prompt names a path list, those are the files whose changes you judge.
+Other agents are editing this same tree, and their files being dirty is not a finding —
+reporting on them is noise at best and a false handoff at worst. If you were handed a
+`mine` diff, read that: it is this session's lines with everyone else's already subtracted. Otherwise assemble it yourself, restricted to the
+scope:
+
 ```bash
-git diff                       # unstaged
-git diff --staged              # staged
-git diff @{upstream}...HEAD    # local commits not yet pushed (skip if no upstream)
-git status --porcelain         # catch untracked new files — read them in full
+git diff -- <scope>                     # unstaged
+git diff --staged -- <scope>            # staged
+git diff @{upstream}...HEAD -- <scope>  # local commits not yet pushed (skip if no upstream)
+git status --porcelain -- <scope>       # untracked new files — read them in full
 ```
+
+Given no scope at all (a bare `/mr-fischoeder --diff` in a tree with one agent in it),
+drop `-- <scope>` and review the whole working tree — and say in the verdict that the
+scope was the tree, so the reader knows why unfamiliar files turn up in it.
 
 Untracked files never show in `git diff`. Miss them and you've reviewed half the change. Read every one.
 
 Read the diff top-to-bottom once for intent, then open the **full files** around each hunk — a diff hides the context a bug needs. In this mode you do **not** touch `gh`, you do **not** commit, and you do **not** fix anything. You review. Report findings; the implementer applies them.
+
+### Working-tree mode: the blast radius
+
+A diff shows what changed. It never shows what *depended* on what changed — and that is
+where a scoped change does its damage: the caller still passing the argument you
+removed, the test asserting the message you reworded, the hook grepping for the string
+you renamed. Read only the files in scope and you find the bugs *in* them while missing
+every bug they *cause*. A narrow scope is not a smaller review; it is a review that
+follows one change everywhere it reaches.
+
+So before reviewing a line of any changed file, map both directions out of it:
+
+```bash
+grep -rn "<changed function / class / key / flag / filename>" . --exclude-dir=.git
+```
+
+- **Callers and importers** — everything that calls a changed function, imports the
+  module, sources the file, or shells out to the script. Read each one.
+- **Contracts you moved** — a renamed key, a changed return shape, an argument added,
+  removed or reordered, a new exit code, an error that now raises where it returned
+  empty. Follow every one to every consumer.
+- **Implicit couplings** — a string another file greps for, a path another script
+  hardcodes, an ordering or side effect a caller silently assumed.
+- **What the change now depends on** — the helpers it newly calls. Confirm they accept
+  what it passes and return what it expects, on the sad path too.
+- **Tests** — those covering the changed file *and* those covering its callers. New
+  behaviour without a sad-path test is a blocking finding (§4).
+
+Open dependents as **full files**, not grep hits: a call site's meaning lives in the
+lines around it.
+
+**Reporting rule.** A dependent the in-scope change *breaks* is a finding, reported at
+the caller's `file:line` — catching those is the whole point of this pass. A flaw that
+was already in that dependent is not: one passing line at most, never a blocker. And a
+file some other agent is mid-edit in is neither — it is not your review.
 
 ### PR mode: assembling the diff
 
@@ -214,7 +287,7 @@ For each one, answer explicitly:
 1. **Does the code actually do what I claimed?** Re-read the exact lines. Not the diff — the file.
 2. **Is the guard I claim is missing already somewhere upstream?** A validation, a `before_action`, a DB constraint, a type, a caller that can't produce that input.
 3. **Can I write the `Failure:` line with real values?** No concrete scenario → drop it.
-4. **Is it on a line this change actually touched?** Pre-existing issues are not this review's business — mention at most in passing, never as a blocker.
+4. **Is it on a line this change touched, or a line this change breaks?** A caller the change breaks is in scope — trace the break to the changed line and name both ends. A pre-existing issue the change neither introduces nor disturbs is not this review's business: mention it at most in passing, never as a blocker. A problem in a file outside your scope that your change never reaches belongs to another agent — drop it.
 
 Tag each survivor:
 - **CONFIRMED** — you traced it and it definitely breaks.
@@ -224,7 +297,7 @@ Report CONFIRMED findings first, ordered most-severe-first, PLAUSIBLE after. **O
 
 ### Automatic false positives — do not report these
 
-- Pre-existing issues on lines the change didn't touch
+- Pre-existing issues on lines the change didn't touch *and doesn't break* — a dependent the change breaks is a finding (§8.4)
 - Anything a linter, typechecker, compiler, or CI would catch (missing imports, type errors, formatting)
 - Pedantic nitpicks a senior engineer wouldn't raise
 - Style opinions not written down in the project's conventions doc — if you can't quote the rule, it isn't one

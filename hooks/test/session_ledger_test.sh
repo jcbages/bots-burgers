@@ -95,5 +95,49 @@ out="$(commit_mine A -m "A: noop")"
 check "$before" "$(git rev-parse HEAD)" "no commit was created"
 check "1" "$(printf '%s' "$out" | grep -c 'nothing to commit')" "and it says so"
 
+echo "== a tool call made from a subdirectory =="
+# The payload's cwd is wherever the session last cd'd to, and git reports paths
+# from the repo root. Resolving one against the other marks every changed file
+# in the tree as deleted — by a session that never opened it.
+mkdir -p deep/er && printf 'x\n' > deep/er/nested.rb
+git add deep/er/nested.rb && git commit -qm nested
+hook_at() { printf '{"session_id":"%s","cwd":"%s"}' "$2" "$3" | "$HOOK" "$1" >/dev/null 2>&1; }
+
+printf 'x\nC line\n' > untouched.rb; git add untouched.rb && git commit -qm untouched
+printf 'x\nC line\nedited by another session\n' > untouched.rb
+
+hook_at pre C "$W/deep/er"
+printf 'x\nC line\nC-EDIT\n' > deep/er/nested.rb
+hook_at post C "$W/deep/er"
+
+check "deep/er/nested.rb" "$(mine C)" "C owns only the file it edited"
+check "1" "$(LEDGER_SESSION=C "$ROOT/bin/mine" | grep -c '^+C-EDIT')" "C's diff is an addition, not a deletion"
+check "0" "$(LEDGER_SESSION=C "$ROOT/bin/mine" | grep -c '^-x')" "C's diff deletes nothing"
+
+echo "== a recorded deletion of a file that is back on disk ==" 
+# A ledger can hold a deletion the tree contradicts: the session deleted it and
+# another recreated it, or a bad snapshot invented it. Either way the file is
+# there now, and committing its removal destroys work nobody asked to lose.
+printf 'x\n' > revived.rb; git add revived.rb && git commit -qm revived
+hook pre D; rm revived.rb; hook post D
+printf 'x\nback, by someone else\n' > revived.rb
+out="$(commit_mine D -m "D: delete revived")"
+check "1" "$(printf '%s' "$out" | grep -c 'revived.rb — deleted here but present')" "the contradiction is named as a skip"
+check "1" "$(git cat-file -e HEAD:revived.rb 2>/dev/null && echo 1 || echo 0)" "revived.rb is still committed"
+check "1" "$([ -e revived.rb ] && echo 1 || echo 0)" "revived.rb is still on disk"
+
+echo "== a path this session did not change, that HEAD deleted meanwhile ==" 
+# origin == shadow is a session that contributed nothing to a path. Replaying
+# that no-op onto a HEAD without the file merges it into emptiness and lands a
+# resurrected, empty file.
+printf 'x\ny\n' > ghost.rb; git add ghost.rb && git commit -qm ghost
+hook pre E; printf 'x E-EDIT\ny\n' > ghost.rb; hook post E
+hook pre E; printf 'x\ny\n'         > ghost.rb; hook post E
+check "ghost.rb" "$(mine E)" "the round trip is still tracked"
+git rm -q ghost.rb && git commit -qm "someone else removed ghost.rb"
+out="$(commit_mine E -m "E: nothing")"
+check "0" "$(git cat-file -e HEAD:ghost.rb 2>/dev/null && echo 1 || echo 0)" "ghost.rb stays deleted"
+check "0" "$(printf '%s' "$out" | grep -c '^  ghost.rb$')" "ghost.rb is not in landing"
+
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

@@ -30,6 +30,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# After the arguments, so -F reads its file where it was typed. Paths given are
+# matched against the ledger's keys, which are repo-relative either way.
+ledger_cd_root || { echo "commit-mine: not a git repo" >&2; exit 1; }
 ledger_dir >/dev/null 2>&1 || { echo "commit-mine: not a git repo, or no session id" >&2; exit 1; }
 base="$(git rev-parse -q --verify HEAD)" || { echo "commit-mine: no commits yet" >&2; exit 1; }
 
@@ -49,8 +52,15 @@ while IFS= read -r p; do
   [ -n "$entry" ] || { skipped+=("$p — not this session's"); continue; }
   IFS=$'\t' read -r origin shadow status <<< "$entry"
   [ "$status" = contested ] && { skipped+=("$p — tangled with another session's edit"); continue; }
+  # Nothing of this session's to replay. Replayed anyway onto a HEAD that has
+  # since dropped the file, the no-op merges into emptiness and resurrects it.
+  [ "$origin" = "$shadow" ] && { skipped+=("$p — unchanged by this session"); continue; }
 
   if [ "$shadow" = "-" ]; then
+    # The tree outranks the record. A file that is on disk now was recreated by
+    # someone, or was never really gone; committing its removal either way
+    # destroys work no one asked to lose.
+    [ -e "$p" ] && { skipped+=("$p — deleted here but present in the tree"); continue; }
     git update-index --force-remove -- "$p" && landing+=("$p"); continue
   fi
   head_blob="$(git rev-parse -q --verify "$base:$p" 2>/dev/null)" || head_blob="-"

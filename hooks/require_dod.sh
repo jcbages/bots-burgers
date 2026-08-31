@@ -159,6 +159,13 @@ if [ -n "$STRUCTURAL" ]; then
       | .input.file_path // empty' "$TRANSCRIPT" 2>/dev/null \
     | grep -qF "$MAP" && MAP_UPDATED=yes
 fi
+# strip_heredoc_bodies drops the very body naming the file, so a map written by a
+# Bash heredoc is invisible to any parse of the transcript. The ledger is not.
+SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // empty')"
+if [ -n "$STRUCTURAL" ] && [ -z "$MAP_UPDATED" ] && [ -n "$SESSION_ID" ]; then
+  ( cd "$ROOT" 2>/dev/null && LEDGER_SESSION="$SESSION_ID" "$REPO_DIR/bin/mine" --files 2>/dev/null ) \
+    | grep -qxF "${MAP#"$ROOT"/}" && MAP_UPDATED=yes
+fi
 
 MISSING=""
 [ -z "$TESTS_RAN" ] && MISSING="- Run the touched tests (the stack's test runner — bin/ci, rails test, rspec, npm test, pytest, go test, flutter test, ...) and show the output."

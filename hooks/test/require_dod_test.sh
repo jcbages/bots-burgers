@@ -10,7 +10,8 @@ set -u
 
 # DOD_HOOK lets you point the suite at another revision of the hook, to confirm a
 # case actually goes red against the version that had the bug.
-HOOK="${DOD_HOOK:-$(cd "$(dirname "$0")/.." && pwd)/require_dod.sh}"
+HOOKS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+HOOK="${DOD_HOOK:-$HOOKS_DIR/require_dod.sh}"
 PROJECT="/tmp/dod-fixture-project"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -61,8 +62,8 @@ expect_in() { # <cwd> <PASS|BLOCK> <name> <transcript line>...
   shift 3
   : > "$WORK/t.jsonl"
   for line in "$@"; do printf '%s\n' "$line" >> "$WORK/t.jsonl"; done
-  out="$(jq -n --arg tp "$WORK/t.jsonl" --arg cwd "$cwd" \
-    '{transcript_path:$tp, cwd:$cwd}' | "$HOOK")"
+  out="$(jq -n --arg tp "$WORK/t.jsonl" --arg cwd "$cwd" --arg sid "${SID:-}" \
+    '{transcript_path:$tp, cwd:$cwd} + (if $sid == "" then {} else {session_id:$sid} end)' | "$HOOK")"
   [ -z "$out" ] && got=PASS || got=BLOCK
   if [ "$got" = "$want" ]; then
     passed=$((passed + 1)); printf '  ok   %s\n' "$name"
@@ -248,6 +249,15 @@ expect_in "$MAPPROJ" PASS  "updating the map settles it"      "$m_write" "$ran_n
 # require_domain_map.sh already forces the map to be *read*, so crediting a read
 # here would make the condition unreachable in every real session.
 expect_in "$MAPPROJ" BLOCK "reading it is not updating it"    "$m_write" "$ran_npm" "$skill_fisch" "$m_map_read"
+
+# A session told to prefer Bash writes the map through a heredoc, whose body is
+# stripped before the transcript is read — so no parse of it can see the edit. The
+# ledger is the only record of who wrote what, and it does not care which tool did.
+LED="$HOOKS_DIR/session_ledger.sh"
+ledger_hook() { printf '{"session_id":"S1","cwd":"%s","tool_use_id":"t1"}' "$MAPPROJ" | "$LED" "$1" >/dev/null 2>&1; }
+( cd "$MAPPROJ" && ledger_hook pre && printf '# Map\nnow current\n' > PROJECT_DOMAIN.md && ledger_hook post )
+SID=S1 expect_in "$MAPPROJ" PASS  "a map written by Bash settles it"  "$m_write" "$ran_npm" "$skill_fisch"
+SID=  expect_in "$MAPPROJ" BLOCK  "and only for the session that wrote it" "$m_write" "$ran_npm" "$skill_fisch"
 
 expect_in "$MAPPROJ" PASS  "a new doc is not structure"       "$m_edit" "$m_write_doc" "$ran_npm" "$skill_fisch"
 expect_in "$MAPPROJ" PASS  "a scratch file is not structure"  "$m_edit" "$m_write_scratch" "$ran_npm" "$skill_fisch"

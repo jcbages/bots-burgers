@@ -23,6 +23,7 @@ MODE="${1:-}"
 IFS=$'\t' read -r SID CWD TID < <(jq -r '[.session_id // "", .cwd // "", .tool_use_id // "one"] | @tsv' 2>/dev/null)
 [ -n "${SID:-}" ] && export LEDGER_SESSION="$SID"
 [ -n "${CWD:-}" ] && cd "$CWD" 2>/dev/null
+ledger_cd_root || exit 0
 
 D="$(ledger_dir)" || exit 0     # not a git repo, or no session id — nothing to record
 mkdir -p "$D"

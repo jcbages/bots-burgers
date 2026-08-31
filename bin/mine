@@ -15,6 +15,7 @@ DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=hooks/lib/ledger.sh
 . "$DIR/hooks/lib/ledger.sh"
 
+ledger_cd_root || { echo "mine: not a git repo" >&2; exit 1; }
 ledger_dir >/dev/null 2>&1 || { echo "mine: not a git repo, or no session id" >&2; exit 1; }
 
 paths="$(ledger_paths)"

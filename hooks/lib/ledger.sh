@@ -22,21 +22,41 @@
 
 set -u
 
+# The git dir and the work tree, in one rev-parse and once per process: a
+# process spawned here is paid twice for every action the session takes.
+_ledger_resolve() {
+  [ -n "${_LEDGER_ROOT:-}" ] && return 0
+  local out
+  out="$(git rev-parse --absolute-git-dir --show-toplevel 2>/dev/null)" || return 1
+  _LEDGER_GITDIR="${out%%$'\n'*}"
+  _LEDGER_ROOT="${out#*$'\n'}"
+  [ -n "$_LEDGER_GITDIR" ] && [ -n "$_LEDGER_ROOT" ] &&
+    [ "$_LEDGER_GITDIR" != "$_LEDGER_ROOT" ]
+}
+
 # Where this session's ledger lives. Repo-local, so a clone is not polluted.
-# Memoized: both the getter and the setter read it once per tracked path, and a
-# `git rev-parse` per call is most of what this hook costs.
 ledger_dir() {
   if [ -z "${_LEDGER_DIR:-}" ]; then
-    local gd sid
-    gd="$(git rev-parse --absolute-git-dir 2>/dev/null)" || return 1
+    local sid
+    _ledger_resolve || return 1
     sid="${LEDGER_SESSION:-${CLAUDE_CODE_SESSION_ID:-}}"
     [ -n "$sid" ] || return 1
-    _LEDGER_DIR="$gd/agent-ledger/$sid"
+    _LEDGER_DIR="$_LEDGER_GITDIR/agent-ledger/$sid"
   fi
   printf '%s' "$_LEDGER_DIR"
 }
 
 ledger_state() { printf '%s/state' "$(ledger_dir)"; }
+
+# Put the process where git's paths already point. Git reports repo-relative and
+# the shell resolves CWD-relative, so a caller running in a subdirectory checks
+# every path against the wrong directory, finds nothing, and records the whole
+# tree as deleted. Every entry point calls this; nothing here resolves a path
+# without it.
+ledger_cd_root() {
+  _ledger_resolve || return 1
+  cd "$_LEDGER_ROOT" || return 1
+}
 
 # Every path differing from HEAD, tracked or not. quotePath off so a non-ASCII
 # name arrives as itself; a newline in a filename is out of scope and would need

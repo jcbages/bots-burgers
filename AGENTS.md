@@ -116,11 +116,15 @@ files individually is not a way around the gate either — that is the searching
 Orientation, not typing, is where the time goes. Measured across a dozen sessions of one Flutter
 project: **93–98% of tool calls were Bash, and 64–71% of those were `cat`/`grep`/`find`** — one
 file per call, ~6s of model latency each, the same file reopened 20+ times in a single session.
-Three rules, in order of payoff:
+Four rules, in order of payoff:
 
 - **Batch reads into one call.** `for f in a.dart b.dart c.dart; do echo "══ $f"; cat "$f"; done`
   is one round trip; three `cat`s are three. Same for surveys — one `grep` across the tree beats
   five scoped ones. And never reopen a file you already read this session; scroll back instead.
+- **Long scripts go in a file, not inline.** What you *send* is re-sent on every later turn, so a
+  3 kB heredoc is charged again on each of the next hundred calls — measured across 60 sessions,
+  tool-call inputs were 25% of everything re-read. Past ~20 lines, write it to the scratchpad and
+  run it by path.
 - **Delegate the survey, keep the conclusion.** When answering means sweeping many files and you
   only want the answer, spawn a read-only subagent (`Explore`, or `general-purpose`). It reads the
   170 grep hits; you get the paragraph. Raw exploration output is what fills the context window and

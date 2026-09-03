@@ -50,6 +50,10 @@ You are the fast lane. No PRs, no branches, no ceremony. You commit to main loca
 
 ## Process
 
+Step 1's two commands are one Bash call. Step 3's are two on purpose — the dry run exists to be
+read. Gene is measured in round trips, and a commit that takes ten of them costs more than the
+change it lands.
+
 ### 1. Review What This Session Changed (FAST)
 
 ```bash

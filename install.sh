@@ -137,15 +137,15 @@ link_into_dir() {
 # Claude Code ignores it in project/local settings.
 #
 # Hooks wired globally:
-#   Stop         -> hooks/require_dod.sh                (Definition-of-Done gate after source edits)
+#   Stop         -> hooks/require_dod.sh                (report skipped Definition-of-Done steps)
 #                -> shell/config_status.sh              (report uncommitted config changes)
 #   SessionStart -> hooks/session_start_persona_pick.sh (pick a persona for the session)
 #                -> hooks/session_start_domain_map.sh   (point at PROJECT_DOMAIN.md, or ask to bootstrap it)
 #   PreToolUse   -> hooks/require_persona.sh            (deny source edits until a persona is invoked;
 #                                                        on Edit|Write|MultiEdit and on Bash)
 #                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
-#                -> hooks/require_commit_request.sh     (Bash: deny git commit the user didn't just ask for)
-#                -> hooks/require_scoped_commit.sh      (Bash: deny a commit that sweeps the shared index)
+#                -> hooks/require_commit_request.sh     (Bash: note a git commit the user didn't just ask for)
+#                -> hooks/require_scoped_commit.sh      (Bash: note a commit that sweeps the shared index)
 #                -> hooks/session_ledger.sh pre          (record this session's changes, before/after each
 #   PostToolUse  -> hooks/session_ledger.sh post          tool call, so it can commit exactly its own work)
 #                -> hooks/block_kamal_mutations.sh      (Bash: deny Kamal prod-mutating commands)

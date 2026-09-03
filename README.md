@@ -20,11 +20,11 @@ ai-config/
 │   ├── session_start_domain_map.sh    # SessionStart: point at PROJECT_DOMAIN.md (or bootstrap it)
 │   ├── require_persona.sh             # PreToolUse (+Bash): deny source edits until a persona is invoked
 │   ├── block_branch_creation.sh      # PreToolUse (Bash): stay on main, no feature branches
-│   ├── require_commit_request.sh     # PreToolUse (Bash): no commit the user didn't just ask for
+│   ├── require_commit_request.sh     # PreToolUse (Bash): note a commit the user didn't just ask for
 │   ├── block_kamal_mutations.sh      # PreToolUse (Bash): no Kamal prod mutations
 │   ├── require_domain_map.sh         # PreToolUse (+Grep|Glob): deny a source-tree sweep until /project-domain runs
 │   ├── ast_grep_scan.sh              # PostToolUse: structural lint of the written file
-│   ├── require_dod.sh                # Stop: Definition-of-Done gate after source edits
+│   ├── require_dod.sh                # Stop: report skipped Definition-of-Done steps
 │   ├── lib/bash_command.sh           # shared: what a Bash command writes, minus heredoc bodies
 │   └── test/                         # one suite per gate; run hooks/test/run_all.sh
 ├── shell/
@@ -76,7 +76,7 @@ system, so only the instructions layer is shared with it.
 your existing file via `jq`, leaving every other key untouched:
 
 - `statusLine` → `shell/statusline.sh`
-- `hooks.Stop` → `hooks/require_dod.sh` (Definition-of-Done gate) + `shell/config_status.sh` (report uncommitted config changes)
+- `hooks.Stop` → `hooks/require_dod.sh` (reports skipped Definition-of-Done steps) + `shell/config_status.sh` (report uncommitted config changes)
 - `hooks.SessionStart` → `hooks/session_start_persona_pick.sh` (pick a persona for the session) + `hooks/session_start_domain_map.sh` (name the project's domain map, or ask for it to be bootstrapped)
 - `hooks.PreToolUse` → `hooks/require_persona.sh` (deny source edits until a persona is invoked); on `Bash`, `require_persona.sh` + `block_branch_creation.sh` + `require_commit_request.sh` + `block_kamal_mutations.sh` + `require_domain_map.sh`; on `Grep`/`Glob`, `require_domain_map.sh` (deny a source-tree sweep until `/project-domain` runs)
 - `hooks.PostToolUse` → `hooks/ast_grep_scan.sh` (structural lint of the written file)

@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 #
-# PreToolUse hook (Bash): deny `git commit` unless the user asked for it, and treat
-# that request as spent once a commit uses it. Committing is the user's call and the
-# moment they want a summary, so the denial hands back the handoff report instead
-# (see AGENTS.md "Handing off"). Wired globally by install.sh (see merge_settings).
+# PreToolUse hook (Bash): note a `git commit` the user has not asked for. Committing
+# is the user's call and the moment they want a summary, so the note points back at
+# the handoff report (see AGENTS.md "Handing off"). It advises and lets the commit
+# through — history is fixable, a stalled session is not. Wired by install.sh.
 #
 set -u
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=hooks/lib/bash_command.sh
 . "$REPO_DIR/lib/bash_command.sh"
+# shellcheck source=hooks/lib/advice.sh
+. "$REPO_DIR/lib/advice.sh"
 
 INPUT="$(cat)"
 CMD="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' | strip_heredoc_bodies)"
 
-# Only gate commits. Amend, fixup and the `commit-tree`/`update-ref` plumbing all
-# count — see GIT_COMMIT_RE. Every other git command is free. The binary may be
-# reached by path, so `git` is not necessarily the first word.
+# Only commits are noted. Amend, fixup and the `commit-tree`/`update-ref` plumbing
+# all count — see GIT_COMMIT_RE. Every other git command is silent. The binary may
+# be reached by path, so `git` is not necessarily the first word.
 printf '%s' "$CMD" | grep -qE "$GIT_COMMIT_RE" || exit 0
 
 # A commit in scratch space is a test fixture, not the user's history. This asks
@@ -39,10 +41,6 @@ LAST_SPOKEN="$(jq -rR "$GENUINE_USER_TEXT
 
 printf '%s' "$LAST_SPOKEN" | grep -qiE "$COMMIT_REQUEST_RE" && exit 0
 
-REASON="Explicit-commit gate (AGENTS.md): the user has not asked for a commit since the last one. Committing is theirs to trigger.
+advise_tool "Explicit-commit gate (AGENTS.md): the user has not asked for a commit since the last one. This is a heads-up, not a refusal — the commit proceeds.
 
-Instead, hand off — list the files this session touched with one line each on *why*, name anything deliberately left out, and stop. If they want it committed they will say so, or run /gene.
-
-If they already asked and this fired anyway, say so; do not retry the command."
-
-jq -n --arg r "$REASON" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
+Unless you are still carrying out a commit they already asked for, hand off instead: list the files this session touched with one line each on *why*, name anything deliberately left out, and stop. If they want it committed they will say so, or run /gene."

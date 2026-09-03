@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# Tests for require_dod.sh — the Definition-of-Done Stop gate.
-# Run: hooks/test/require_dod_test.sh
+# Tests for require_dod.sh — the Definition-of-Done Stop gate, which reports rather
+# than refuses. Run: hooks/test/require_dod_test.sh
 #
-# The subtle cases, each one below: the gate must not match its own block message,
-# must read a multi-line record whole, and must not trust role=="user" as provenance
-# when agent reports wear that role too. A gate nobody tests is a suggestion.
+# The subtle cases, each one below: the gate must not match its own message, must
+# read a multi-line record whole, and must not trust role=="user" as provenance when
+# agent reports wear that role too. A silenced gate is a gate that says nothing.
 set -u
 
 # DOD_HOOK lets you point the suite at another revision of the hook, to confirm a
@@ -28,11 +28,14 @@ user_skip='{"message":{"role":"user","content":[{"type":"text","text":"skip dod"
 user_skip_str='{"message":{"role":"user","content":"Skip DOD please"}}'
 assistant_skip='{"message":{"role":"assistant","content":[{"type":"text","text":"You may reply skip dod to bypass."}]}}'
 tool_result_skip='{"message":{"role":"user","content":[{"type":"tool_result","content":"skip dod"}]}}'
-# The shape the harness actually replays a Stop refusal in — isMeta, and the reason
-# wrapped in "Stop hook feedback:". Verified against every such record on this
-# machine; a hand-written approximation only proves the guess is self-consistent.
-own_block='{"isMeta":true,"message":{"role":"user","content":"Stop hook feedback:\nDefinition of Done gate (AGENTS.md): this session edited product code but is missing:\n- Run the touched tests.\nComplete the missing steps, then finish. If the user explicitly wants to skip verification, they can reply '"'"'skip dod'"'"'."}}'
-pasted_block='{"message":{"role":"user","content":"Definition of Done gate (AGENTS.md): this session edited product code but is missing:\n- Run the touched tests."}}'
+# The shape the harness replays Stop-hook output in — isMeta, and the text wrapped in
+# "Stop hook feedback:". Verified against every such record on this machine; a
+# hand-written approximation only proves the guess is self-consistent.
+own_note='{"isMeta":true,"message":{"role":"user","content":"Stop hook feedback:\nDefinition of Done gate (AGENTS.md): this session edited product code and the transcript shows no:\n- test run.\nNothing is blocked. To silence this for the session, reply '"'"'skip dod'"'"', or '"'"'no review needed'"'"' to drop just the review step."}}'
+# isMeta is provenance for a refusal the harness replayed; a human pasting the same
+# text back wears role "user" with no such marker, so the text itself must not read
+# as consent — it names both bypass phrases.
+pasted_note='{"message":{"role":"user","content":"Definition of Done gate (AGENTS.md): this session edited product code and the transcript shows no:\n- test run.\nTo silence this for the session, reply '"'"'skip dod'"'"', or '"'"'no review needed'"'"' to drop just the review step."}}'
 agent_report='{"type":"user","userType":"external","message":{"role":"user","content":"<task-notification>\n<result>Verdict: SHIP IT. Note the gate is bypassed when the user replies skip dod.</result>\n</task-notification>"}}'
 hook_feedback='{"isMeta":true,"message":{"role":"user","content":"You were blocked; you may reply skip dod to bypass."}}'
 command_stdout='{"message":{"role":"user","content":"<local-command-stdout>reply `skip dod` to bypass it for a session</local-command-stdout>"}}'
@@ -57,14 +60,14 @@ bash_scratch='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"
 passed=0
 failed=0
 
-expect_in() { # <cwd> <PASS|BLOCK> <name> <transcript line>...
+expect_in() { # <cwd> <PASS|NOTE> <name> <transcript line>...
   local cwd="$1" want="$2" name="$3" line got out
   shift 3
   : > "$WORK/t.jsonl"
   for line in "$@"; do printf '%s\n' "$line" >> "$WORK/t.jsonl"; done
   out="$(jq -n --arg tp "$WORK/t.jsonl" --arg cwd "$cwd" --arg sid "${SID:-}" \
     '{transcript_path:$tp, cwd:$cwd} + (if $sid == "" then {} else {session_id:$sid} end)' | "$HOOK")"
-  [ -z "$out" ] && got=PASS || got=BLOCK
+  [ -z "$out" ] && got=PASS || got=NOTE
   if [ "$got" = "$want" ]; then
     passed=$((passed + 1)); printf '  ok   %s\n' "$name"
   else
@@ -72,70 +75,67 @@ expect_in() { # <cwd> <PASS|BLOCK> <name> <transcript line>...
   fi
 }
 
-expect() { expect_in "$PROJECT" "$@"; } # <PASS|BLOCK> <name> <transcript line>...
+expect() { expect_in "$PROJECT" "$@"; } # <PASS|NOTE> <name> <transcript line>...
 
 echo "== gating: which sessions are checked at all =="
-expect BLOCK "source edit, nothing else"          "$edit_src"
+expect NOTE  "source edit, nothing else"          "$edit_src"
 expect PASS  "docs-only edit passes through"      "$edit_doc"
-expect BLOCK "tests without a review"             "$edit_src" "$ran_npm"
+expect NOTE  "tests without a review"             "$edit_src" "$ran_npm"
 
 echo "== the review requirement =="
 expect PASS  "Skill(mr-fischoeder) satisfies"     "$edit_src" "$ran_npm" "$skill_fisch"
 expect PASS  "user-typed /mr-fischoeder satisfies" "$edit_src" "$ran_npm" "$typed_fisch"
 expect PASS  "Fischoeder subagent satisfies"      "$edit_src" "$ran_flutter" "$agent_fisch"
-expect BLOCK "code-review no longer satisfies"    "$edit_src" "$ran_npm" "$skill_review"
+expect NOTE  "code-review no longer satisfies"    "$edit_src" "$ran_npm" "$skill_review"
 
 echo "== the test requirement =="
-expect BLOCK "review without tests"               "$edit_src" "$skill_fisch"
+expect NOTE  "review without tests"               "$edit_src" "$skill_fisch"
 expect PASS  "flutter test counts as a runner"    "$edit_src" "$ran_flutter" "$skill_fisch"
 
 echo "== the bypass: only a genuine human turn disarms the gate =="
 expect PASS  "user types 'skip dod'"              "$edit_src" "$user_skip"
 expect PASS  "user turn as a plain string"        "$edit_src" "$user_skip_str"
-expect BLOCK "the gate's OWN block message"       "$edit_src" "$own_block"
-expect BLOCK "a subagent report quoting it"       "$edit_src" "$agent_report"
-expect BLOCK "hook feedback (isMeta) quoting it"  "$edit_src" "$hook_feedback"
-expect BLOCK "command stdout quoting it"          "$edit_src" "$command_stdout"
-expect BLOCK "an assistant turn quoting it"       "$edit_src" "$assistant_skip"
-expect BLOCK "a tool_result quoting it"           "$edit_src" "$tool_result_skip"
+expect NOTE  "the gate's OWN message"             "$edit_src" "$own_note"
+expect NOTE  "...nor does it waive its own review" "$edit_src" "$ran_npm" "$own_note"
+expect NOTE  "a human pasting that message back"  "$edit_src" "$pasted_note"
+expect NOTE  "...which waives no review either"   "$edit_src" "$ran_npm" "$pasted_note"
+expect NOTE  "a subagent report quoting it"       "$edit_src" "$agent_report"
+expect NOTE  "hook feedback (isMeta) quoting it"  "$edit_src" "$hook_feedback"
+expect NOTE  "command stdout quoting it"          "$edit_src" "$command_stdout"
+expect NOTE  "an assistant turn quoting it"       "$edit_src" "$assistant_skip"
+expect NOTE  "a tool_result quoting it"           "$edit_src" "$tool_result_skip"
+
+echo "== 'no review needed' waives the review step alone =="
+user_no_review='{"message":{"role":"user","content":[{"type":"text","text":"no review needed, just ship it"}]}}'
+user_skip_review='{"message":{"role":"user","content":"skip the review"}}'
+agent_no_review='{"type":"user","userType":"external","message":{"role":"user","content":"<task-notification>\n<result>They said no review needed.</result>\n</task-notification>"}}'
+expect PASS  "waived, with tests run"              "$edit_src" "$ran_npm" "$user_no_review"
+expect PASS  "'skip the review' waives it too"     "$edit_src" "$ran_npm" "$user_skip_review"
+expect NOTE  "it does not waive the tests"         "$edit_src" "$user_no_review"
+expect NOTE  "a subagent quoting it does not"      "$edit_src" "$ran_npm" "$agent_no_review"
 
 echo "== Bash-written source counts as an edit (auto mode's real path) =="
-expect BLOCK "heredoc into a .dart file"          "$bash_heredoc"
-expect BLOCK "sed -i on a .ts file"               "$bash_sed"
-expect BLOCK "tee into a .dart file"              "$bash_tee"
+expect NOTE  "heredoc into a .dart file"          "$bash_heredoc"
+expect NOTE  "sed -i on a .ts file"               "$bash_sed"
+expect NOTE  "tee into a .dart file"              "$bash_tee"
 expect PASS  "reading a source file is not an edit" "$bash_read"
 expect PASS  "grepping a source file is not an edit" "$bash_grep"
 expect PASS  "heredoc into README.md still passes" "$bash_doc"
 expect PASS  "scratchpad writes are not product code" "$bash_scratch"
 expect PASS  "Bash edit + tests + review satisfies" "$bash_heredoc" "$ran_flutter" "$skill_fisch"
 expect PASS  "a path merely quoted inside a heredoc" "$bash_quoted"
-expect BLOCK "a QUOTED redirect target"           "$bash_quoted_target"
-expect BLOCK "sed -i followed by && something"    "$bash_sed_chain"
+expect NOTE  "a QUOTED redirect target"           "$bash_quoted_target"
+expect NOTE  "sed -i followed by && something"    "$bash_sed_chain"
 
 echo "== a shell-script suite is a test runner too =="
 expect PASS  "*_test.sh satisfies the test step"   "$bash_heredoc" "$ran_shell" "$skill_fisch"
 expect PASS  "bats satisfies the test step"        "$bash_heredoc" "$ran_bats" "$skill_fisch"
-expect BLOCK "READING a _test.sh is not running it" "$bash_heredoc" "$read_test_file" "$skill_fisch"
-expect BLOCK "WRITING a _test.sh is not running it" "$bash_heredoc" "$write_test_file" "$skill_fisch"
+expect NOTE  "READING a _test.sh is not running it" "$bash_heredoc" "$read_test_file" "$skill_fisch"
+expect NOTE  "WRITING a _test.sh is not running it" "$bash_heredoc" "$write_test_file" "$skill_fisch"
 
 echo "== a malformed line must not void a scan =="
 expect PASS  "bypass survives a bad line before it" "$edit_src" "$malformed" "$user_skip"
-expect BLOCK "gate still engages after a bad line"  "$malformed" "$edit_src"
-
-# A gate that can refuse forever hangs an unattended session, so it must let go
-# after MAX_BLOCKS. One earlier refusal is not enough — that case stays blocked
-# above, where it proves the gate does not read its own message as consent.
-echo "== liveness: the gate lets go rather than pinning a session =="
-expect BLOCK "two prior blocks still refuse"       "$edit_src" "$own_block" "$own_block"
-expect PASS  "three prior blocks release"          "$edit_src" "$own_block" "$own_block" "$own_block"
-# The cap must not be reachable by talking about it: an assistant explaining why it
-# is blocked names the gate every turn, and counting mentions would let it out.
-chatter='{"message":{"role":"assistant","content":[{"type":"text","text":"The Definition of Done gate (AGENTS.md) is firing again."}]}}'
-quoted_mid='{"message":{"role":"user","content":"I know the Definition of Done gate (AGENTS.md): this session edited product code is annoying."}}'
-expect BLOCK "assistant chatter cannot reach it"   "$edit_src" "$chatter" "$chatter" "$chatter"
-expect BLOCK "a mid-sentence quote cannot either"  "$edit_src" "$quoted_mid" "$quoted_mid" "$quoted_mid"
-# isMeta is the provenance: a human pasting the refusal back wears role "user" too.
-expect BLOCK "a human pasting it cannot either"    "$edit_src" "$pasted_block" "$pasted_block" "$pasted_block"
+expect NOTE  "gate still engages after a bad line"  "$malformed" "$edit_src"
 
 # The real regression: a throwaway script written into the repo (the only place it
 # can resolve the project's deps), run, and deleted. Nothing survives, so there is
@@ -155,11 +155,11 @@ edit_gone='{"message":{"content":[{"type":"tool_use","name":"Edit","input":{"fil
 bash_gone='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cat > '$GITPROJ'/src/gone.ts <<EOF\nx\nEOF"}}]}}'
 bash_rm='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"rm -f '$GITPROJ'/src/gone.ts"}}]}}'
 
-expect_in "$GITPROJ" BLOCK "an edit still on disk arms it"   "$edit_kept"
+expect_in "$GITPROJ" NOTE  "an edit still on disk arms it"   "$edit_kept"
 expect_in "$GITPROJ" PASS  "an edit since deleted does not"  "$edit_gone"
 expect_in "$GITPROJ" PASS  "Bash write then rm does not"     "$bash_gone" "$bash_rm"
-expect_in "$GITPROJ" BLOCK "a surviving edit still arms it"  "$edit_gone" "$edit_kept"
-expect_in "$PROJECT" BLOCK "non-git project keeps old gating" "$edit_src"
+expect_in "$GITPROJ" NOTE  "a surviving edit still arms it"  "$edit_gone" "$edit_kept"
+expect_in "$PROJECT" NOTE  "non-git project keeps old gating" "$edit_src"
 
 # Concurrency (AGENTS.md): another agent dirtying the tree is not this session's
 # work. The gate reads the transcript, so their edits must stay invisible to it.
@@ -195,8 +195,8 @@ printf 'y\n' > "$GITPROJ/sub/src/live.ts"
 printf 'y\n' > "$GITPROJ/packages/a/src/gone.ts"
 bash_sub_live='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cd '$GITPROJ'/sub && cat > src/live.ts <<EOF\nx\nEOF"}}]}}'
 bash_sub_gone='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cd '$GITPROJ'/sub && cat > src/gone.ts <<EOF\nx\nEOF"}}]}}'
-expect_in "$GITPROJ" BLOCK "a cd'd write that survived"      "$bash_sub_live"
-expect_in "$GITPROJ" BLOCK "the tail collision it accepts"   "$bash_sub_gone"
+expect_in "$GITPROJ" NOTE  "a cd'd write that survived"      "$bash_sub_live"
+expect_in "$GITPROJ" NOTE  "the tail collision it accepts"   "$bash_sub_gone"
 rm -rf "$GITPROJ/packages" "$GITPROJ/sub"
 
 # Committed work is still this session's work. A branch with no upstream cannot
@@ -211,7 +211,7 @@ printf 'x\n' > "$COMMITTED/src/thing.ts"
 git -C "$COMMITTED" add -A >/dev/null 2>&1
 git -C "$COMMITTED" -c user.email=t@t -c user.name=t commit -qm init >/dev/null 2>&1
 edit_committed='{"message":{"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"'$COMMITTED'/src/thing.ts"}}]}}'
-expect_in "$COMMITTED" BLOCK "clean tree, no upstream"       "$edit_committed"
+expect_in "$COMMITTED" NOTE  "clean tree, no upstream"       "$edit_committed"
 rm -rf "$COMMITTED"
 
 # The domain map records where things live, so it goes stale when files appear or
@@ -242,13 +242,13 @@ git -C "$MAPPROJ" add src/kept.ts >/dev/null 2>&1
 git -C "$MAPPROJ" -c user.email=t@t -c user.name=t commit -qm fixture >/dev/null 2>&1
 m_rewrite='{"message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"'$MAPPROJ'/src/kept.ts"}}]}}'
 expect_in "$MAPPROJ" PASS  "rewriting a tracked file"        "$m_rewrite" "$ran_npm" "$skill_fisch"
-expect_in "$MAPPROJ" BLOCK "adding a source file stales it"   "$m_write" "$ran_npm" "$skill_fisch"
-expect_in "$MAPPROJ" BLOCK "removing one stales it"           "$m_edit" "$m_rm" "$ran_npm" "$skill_fisch"
+expect_in "$MAPPROJ" NOTE  "adding a source file stales it"   "$m_write" "$ran_npm" "$skill_fisch"
+expect_in "$MAPPROJ" NOTE  "removing one stales it"           "$m_edit" "$m_rm" "$ran_npm" "$skill_fisch"
 expect_in "$MAPPROJ" PASS  "updating the map settles it"      "$m_write" "$ran_npm" "$skill_fisch" "$m_map_edit"
 
 # require_domain_map.sh already forces the map to be *read*, so crediting a read
 # here would make the condition unreachable in every real session.
-expect_in "$MAPPROJ" BLOCK "reading it is not updating it"    "$m_write" "$ran_npm" "$skill_fisch" "$m_map_read"
+expect_in "$MAPPROJ" NOTE  "reading it is not updating it"    "$m_write" "$ran_npm" "$skill_fisch" "$m_map_read"
 
 # A session told to prefer Bash writes the map through a heredoc, whose body is
 # stripped before the transcript is read — so no parse of it can see the edit. The
@@ -257,7 +257,7 @@ LED="$HOOKS_DIR/session_ledger.sh"
 ledger_hook() { printf '{"session_id":"S1","cwd":"%s","tool_use_id":"t1"}' "$MAPPROJ" | "$LED" "$1" >/dev/null 2>&1; }
 ( cd "$MAPPROJ" && ledger_hook pre && printf '# Map\nnow current\n' > PROJECT_DOMAIN.md && ledger_hook post )
 SID=S1 expect_in "$MAPPROJ" PASS  "a map written by Bash settles it"  "$m_write" "$ran_npm" "$skill_fisch"
-SID=  expect_in "$MAPPROJ" BLOCK  "and only for the session that wrote it" "$m_write" "$ran_npm" "$skill_fisch"
+SID=  expect_in "$MAPPROJ" NOTE  "and only for the session that wrote it" "$m_write" "$ran_npm" "$skill_fisch"
 
 expect_in "$MAPPROJ" PASS  "a new doc is not structure"       "$m_edit" "$m_write_doc" "$ran_npm" "$skill_fisch"
 expect_in "$MAPPROJ" PASS  "a scratch file is not structure"  "$m_edit" "$m_write_scratch" "$ran_npm" "$skill_fisch"

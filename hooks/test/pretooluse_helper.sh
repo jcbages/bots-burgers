@@ -9,13 +9,16 @@ failed=0
 
 SESSION="${SESSION:-testsession}"
 
-decide() { # <json tool_input> -> allow|deny
+decide() { # <json tool_input> -> allow|warn|deny
   local out
-  # An allowed call produces no output at all, so jq never runs on it.
+  # A call the gate has nothing to say about produces no output at all.
   out="$(printf '{"tool_input":%s,"transcript_path":%s,"session_id":"%s"}' \
         "$1" "$(jq -Rn --arg t "$T" '$t')" "$SESSION" | "$HOOK")"
   [ -z "$out" ] && { printf 'allow'; return; }
-  printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision'
+  # Advice carries no decision, so absence of one is the signal — but only when the
+  # advice is actually there. An output with neither is malformed, not permissive.
+  printf '%s' "$out" | jq -r '.hookSpecificOutput
+    | .permissionDecision // (if .additionalContext then "warn" else "malformed" end)'
 }
 
 check() { # <want> <got> <name>

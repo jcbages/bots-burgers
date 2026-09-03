@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
 #
-# PreToolUse hook (Bash): deny a `git commit` that takes whatever happens to be
+# PreToolUse hook (Bash): note a `git commit` that takes whatever happens to be
 # staged. `.git/index` is one file shared by every agent working in this tree, so
 # `git add` there is a read-modify-write race with a commit as the payload — one
 # agent stages, another commits, and the second one's history carries the first
-# one's half-finished work. A commit must therefore name what it is committing, or
-# be built in a private index (`GIT_INDEX_FILE` + `commit-tree`, see /gene step 3),
-# which never touches the shared one at all. Wired globally by install.sh.
+# one's half-finished work. Naming the paths, or building the commit in a private
+# index (`GIT_INDEX_FILE` + `commit-tree`, see /gene step 3), avoids that. This
+# advises and lets the commit through; a mixed commit is sorted out later, on a
+# branch that always converges. Wired globally by install.sh.
 #
 set -u
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=hooks/lib/bash_command.sh
 . "$REPO_DIR/lib/bash_command.sh"
+# shellcheck source=hooks/lib/advice.sh
+. "$REPO_DIR/lib/advice.sh"
 
 CMD="$(jq -r '.tool_input.command // empty' | strip_heredoc_bodies)"
 
 # Only the porcelain sweeps an index it did not build. `commit-tree` commits a tree
-# assembled elsewhere — that is the flow this gate steers toward, so it stays free.
+# assembled elsewhere — that is the flow this gate steers toward, so it stays silent.
 printf '%s' "$CMD" \
   | grep -qE '(^|[;&|[:space:]])([A-Za-z0-9_./-]*/)?git[[:space:]]+([^;&|]*[[:space:]])?commit([[:space:]]|$)' \
   || exit 0
@@ -40,11 +43,11 @@ SCOPED='commit([[:space:]]|$)[^;&|]*[[:space:]]--[[:space:]]'
 
 if printf '%s' "$ARGS" | grep -qE "$SWEEPS_ALL" \
   || ! printf '%s' "$ARGS" | grep -qE "$SCOPED"; then
-  REASON="Scoped-commit gate (AGENTS.md): .git/index is shared with every agent working in this tree, so a commit that takes whatever is staged can carry someone else's half-finished work into your history — and yours into theirs. Name what you are committing.
+  advise_tool "Scoped-commit gate (AGENTS.md): this commit takes whatever is staged, and .git/index is shared with every agent working in this tree — so it may carry someone else's half-finished work into your history. The commit proceeds; if that matters here, name what you are committing instead.
 
   git commit -m '...' -- path/a path/b
 
-That commits the working-tree content of those paths and ignores every other staged path. For new files, or to commit only *some* hunks of a file another agent is also editing, build the commit in a private index instead (/gene step 3) — it never writes .git/index:
+That commits the working-tree content of those paths and ignores every other staged path. For new files, or to commit only *some* hunks of a file another agent is also editing, build the commit in a private index (/gene step 3) — it never writes .git/index:
 
   base=\$(git rev-parse HEAD)
   export GIT_INDEX_FILE=\"\$(git rev-parse --git-dir)/gene-index\"
@@ -52,6 +55,4 @@ That commits the working-tree content of those paths and ignores every other sta
   unset GIT_INDEX_FILE
   sha=\$(git commit-tree \"\$tree\" -p \"\$base\" -F msg.txt)
   git update-ref HEAD \"\$sha\" \"\$base\"   # fails if another agent committed meanwhile"
-
-  jq -n --arg r "$REASON" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
 fi

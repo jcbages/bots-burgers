@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 #
-# Stop hook: report uncommitted ai-config changes; never commit them. Committing is
-# the user's call here for the same reason the PreToolUse commit gate enforces it
-# everywhere else — and a hook that committed on every stop would fragment one change
-# across however many times the session happened to end.
+# Stop hook: report uncommitted ai-config changes. The session commits its own work
+# (AGENTS.md), so what is left here is what it forgot; a hook that committed for it
+# would fragment one change across however many times the session happened to end.
 #
 set -eu
 
@@ -20,5 +19,5 @@ AHEAD="$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)"
 UNPUSHED=""
 [ "$AHEAD" != "0" ] && UNPUSHED=" $AHEAD commit(s) unpushed."
 
-jq -n --arg m "ai-config has $CHANGED uncommitted file(s): $FILES.$UNPUSHED Commit when you're ready — auto-commit is off." \
+jq -n --arg m "ai-config has $CHANGED uncommitted file(s): $FILES.$UNPUSHED The session was meant to commit them (/gene)." \
   '{systemMessage: $m}'

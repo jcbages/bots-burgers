@@ -144,7 +144,6 @@ link_into_dir() {
 #   PreToolUse   -> hooks/require_persona.sh            (deny source edits until a persona is invoked;
 #                                                        on Edit|Write|MultiEdit and on Bash)
 #                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
-#                -> hooks/require_commit_request.sh     (Bash: note a git commit the user didn't just ask for)
 #                -> hooks/require_scoped_commit.sh      (Bash: note a commit that sweeps the shared index)
 #                -> hooks/session_ledger.sh pre          (record this session's changes, before/after each
 #   PostToolUse  -> hooks/session_ledger.sh post          tool call, so it can commit exactly its own work)
@@ -164,7 +163,6 @@ merge_settings() {
     --arg domain "$REPO_DIR/hooks/session_start_domain_map.sh" \
     --arg persona "$REPO_DIR/hooks/require_persona.sh" \
     --arg no_branch "$REPO_DIR/hooks/block_branch_creation.sh" \
-    --arg ask_commit "$REPO_DIR/hooks/require_commit_request.sh" \
     --arg scoped_commit "$REPO_DIR/hooks/require_scoped_commit.sh" \
     --arg no_kamal "$REPO_DIR/hooks/block_kamal_mutations.sh" \
     --arg domain_gate "$REPO_DIR/hooks/require_domain_map.sh" \
@@ -176,7 +174,7 @@ merge_settings() {
      | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." }, { type: "command", command: $domain, statusMessage: "Locating the domain map..." } ] } ]
      | .hooks.PreToolUse = [
          { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] },
-         { matcher: "Bash", hooks: [ { type: "command", command: $persona }, { type: "command", command: $no_branch }, { type: "command", command: $ask_commit }, { type: "command", command: $scoped_commit }, { type: "command", command: $no_kamal }, { type: "command", command: $domain_gate } ] },
+         { matcher: "Bash", hooks: [ { type: "command", command: $persona }, { type: "command", command: $no_branch }, { type: "command", command: $scoped_commit }, { type: "command", command: $no_kamal }, { type: "command", command: $domain_gate } ] },
          { matcher: "Grep|Glob", hooks: [ { type: "command", command: $domain_gate, statusMessage: "Checking the domain map..." } ] },
          { matcher: "Bash|Edit|Write|NotebookEdit", hooks: [ { type: "command", command: ($ledger + " pre") } ] }
        ]

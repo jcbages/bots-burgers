@@ -1,10 +1,10 @@
 ---
 name: gene
-description: "Gene Belcher persona — fast commit to local `main` (no PR, no push) and, when Linear is set up, log a lightweight ticket. TRIGGER when user types `/gene`, says 'commit this', 'quick commit', 'log this to Linear', 'fast lane', or wants to ship session work without the full PR ceremony. SKIP when user asks for a PR (use `/mr-frond`) or wants to push — the user pushes manually."
+description: "Gene Belcher persona — fast commit to local `main` (no PR, no push) and, when Linear is set up, log a lightweight ticket. TRIGGER whenever a piece of work is finished and about to be handed off — the session commits its own work (AGENTS.md) — and when user types `/gene`, says 'commit this', 'quick commit', 'log this to Linear', or 'fast lane'. SKIP when user asks for a PR (use `/mr-frond`) or wants to push — the user pushes manually."
 user-invocable: true
 ---
 
-Start by printing this EXACT ASCII art (preserve all spacing), then wait for instructions.
+Start by printing this EXACT ASCII art (preserve all spacing). If you were invoked to commit finished work, go straight into the process below — that is the whole instruction. If the user summoned you with nothing pending, wait.
 
 ```
                %%%                 .-----------------------------------.
@@ -81,12 +81,14 @@ If `bin/mine` reports paths it **could not separate from another session's edits
 those are contested: they will not be committed. Name them in the report and leave
 them — two sessions rewrote the same lines, and only their authors can untangle that.
 
-### 1b. Definition-of-Done Spot-Check (FAST, but not skippable)
+### 1b. Definition-of-Done Spot-Check (FAST — always runs, never blocks)
 
-- **Tests ran green on the touched code?** If there's no evidence in the session, run the touched test files now (via `ci.test_command`). Red → stop and hand back to the persona; Gene does not commit red code.
-- **Fresh-eyes review happened?** If not, spawn ONE fresh-context review subagent on `bin/mine` (this session's diff), scoped to the bug checklist (the built-in `~/.claudita/skills/_shared/bug-checklist.md`, plus any the project names) and the feature's intent. Fix real findings before committing (or hand back if they're big).
+- **Tests ran green on the touched code?** If there's no evidence in the session, run the touched test files now (via `ci.test_command`).
+- **Fresh-eyes review happened?** If not, spawn ONE fresh-context review subagent on `bin/mine` (this session's diff), scoped to the bug checklist (the built-in `~/.claudita/skills/_shared/bug-checklist.md`, plus any the project names) and the feature's intent.
 
-The express train still has brakes.
+Fix what is quick; commit either way. The commit is best effort (AGENTS.md) and tags are what
+mark the working versions, so red tests and unfinished edges go in the report, named, rather
+than into a stalled session. The one thing that must not slip is scope: this session's lines only.
 
 ### 2. Find or Create a Linear Ticket (QUICK — skip if Linear is unavailable)
 
@@ -155,7 +157,7 @@ If a ticket was logged, it should already be **Done** and assigned to the curren
 ## What This Is NOT
 
 - **Not a PR flow** -- no branches, no worktrees, no PR descriptions
-- **Not a full CI gate** -- no full CI, but never commit unverified code (step 1b re-runs touched tests)
+- **Not a full CI gate** -- step 1b re-runs the touched tests so the report can say where they stand, not to block the commit
 - **Not a deep ticket** -- the Linear ticket is a fast log, not a spec
 
 ## Character Notes

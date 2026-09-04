@@ -13,11 +13,12 @@
 
 # Git Workflow (applies to all projects)
 
-- **Always work directly on `main`** — this is about *which branch*, never about committing unasked: when you do commit it goes to `main`, and when a branch's work is finished, merge it back into `main`.
-- **The user triggers every commit, one at a time.** Don't commit unprompted, and don't treat one "commit this" as standing permission for the rest of the session — consent expires the moment it is used. `hooks/require_commit_request.sh` notes any `git commit` the user has not asked for since the last one, and lets it through. When they do ask, `/gene` is the fast lane (it re-runs the touched tests and splits mixed files before committing).
+- **Always work directly on `main`** — this is about *which branch*: when you commit it goes to `main`, and when a branch's work is finished, merge it back into `main`.
+- **Commit the session's work yourself, every time.** Finished work ends in a commit on `main` — run `/gene` when you would otherwise hand off, without being asked and without asking. An uncommitted session leaves no record of what was done; a committed one is the record. The PR flows are the exception — `/mr-frond` and `/teddy` commit on a branch inside their own worktree.
+- **The commit is best effort.** It may be broken, half-tested, or mid-refactor. Which versions actually work is what tags are for, not something every commit has to carry, and the branch always converges. What is *not* optional is scoping it as tightly as the tools allow: commit only this session's lines (`bin/mine`, `bin/commit-mine`), leave contested files out, and say in the report what is red or unfinished rather than letting the commit imply it is done.
 - Only create, switch to, or stay on a non-`main` branch when I **explicitly** ask for it. Absent an explicit instruction, assume `main`.
 - **A commit carries only your own work.** `.git/index` is one file every agent in a working tree shares, so `git add` there is a read-modify-write race with a commit as the payload — and once two sessions have written to a file, no after-the-fact reading of the diff can say which lines are whose. A session hook records that as it happens: for each file you touch it keeps the content when you first touched it and that content plus only your edits, so another agent's lines are in both snapshots and cancel. `bin/mine` shows your diff in a tree full of everyone's; `bin/commit-mine -m "..."` replays it onto HEAD in a private index and moves the ref with a compare-and-swap. Prefer those over `git add` + `git commit` in a shared tree — `hooks/require_scoped_commit.sh` flags the unscoped forms without stopping them, and a commit that names its paths (`git commit -m '...' -- <paths>`) is the fallback when the ledger is unavailable. A worktree has its own index and is exempt, which is why `/mr-frond` and `/teddy` commit inside one.
-- **The workflow gates advise; they do not refuse.** The two commit gates above and the Definition-of-Done gate below each name their hazard and let the work through. A mixed commit, a skipped test run, an unreviewed hunk — every one of them is cheap to fix on a branch that always converges, and none is worth stalling a session over. Read the note, keep the momentum, tidy up on the next pass. The gates that guard something outside your own diff — branch creation, production mutations — still refuse.
+- **The workflow gates advise; they do not refuse.** The scoped-commit gate above and the Definition-of-Done gate below each name their hazard and let the work through. A mixed commit, a skipped test run, an unreviewed hunk — every one of them is cheap to fix on a branch that always converges, and none is worth stalling a session over. Read the note, keep the momentum, tidy up on the next pass. The gates that guard something outside your own diff — branch creation, production mutations — still refuse.
 - **Parallel work is encouraged** — other agents may edit the same files at the same time. Seeing changes in a file you didn't make yourself is expected, not a conflict or a red flag: don't revert them, don't halt, and don't treat unexpected diffs as corruption. Rebase/merge onto the latest state, keep your own change scoped, and carry on.
 
 ---
@@ -77,7 +78,7 @@ No implementation work (feature, bug fix, refactor) is done until every step has
 
 ## Handing off
 
-Finish a piece of work by **reporting it, not committing it**. The handoff is three things,
+Finish a piece of work by **committing it, then reporting it**. The handoff is three things,
 and it is short:
 
 1. **Files touched, one line each on *why*** — grouped if there are many, and naming the one or
@@ -87,7 +88,8 @@ and it is short:
    more often than not.
 3. **Verification you actually ran** — the command and its result, not "should pass".
 
-Then stop. The user decides whether that becomes a commit (see the Git Workflow rules above).
+Then stop. The commit is already on `main` (see the Git Workflow rules above); what the user
+decides is what happens next.
 
 ## Blast radius
 

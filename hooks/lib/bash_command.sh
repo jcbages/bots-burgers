@@ -64,15 +64,10 @@ source_write_targets() {
     || true
 }
 
-# The spellings that write history. `git commit-tree` builds a commit and
-# `git update-ref` moves the branch onto it, so a gate matching the bare word
-# `commit` waves the two-step plumbing form through untouched. One copy, because
-# two drift.
+# Every spelling that writes history: `git commit-tree` builds a commit and
+# `git update-ref` moves the branch onto it, so the bare word `commit` misses the
+# two-step plumbing form that git_working_dir still has to look behind.
 GIT_COMMIT_VERB='(commit(-tree)?|update-ref)'
-_GIT_COMMIT="([A-Za-z0-9_./-]*/)?git[[:space:]]+([^;&|]*[[:space:]])?$GIT_COMMIT_VERB"
-# `commit-mine` writes history too — it is the sanctioned way to do it here, which
-# is exactly why it must not be the way around the gate.
-GIT_COMMIT_RE="(^|[;&|[:space:]])($_GIT_COMMIT|([A-Za-z0-9_./-]*/)?commit-mine)([[:space:]]|\$)"
 
 # Where a git invocation in this command actually runs: an explicit -C, else a
 # directory cd'd into beforehand, else empty (meaning the session's own cwd). Text
@@ -106,12 +101,6 @@ GENUINE_USER_TEXT='fromjson? // empty
       then [ scan("<command-(?:name|args)>([^<]*)</command-(?:name|args)>") | .[0] ] | join(" ")
       else . end )
   | select(length > 0)'
-
-# What the user says when they want a commit. A grep pattern rather than a jq one:
-# every layer of shell quoting around a regex is a place to lose a backslash, and the
-# caller greps. The caller also decides *which* turn to match — only their latest, so
-# a request spends itself instead of standing for the rest of the session.
-COMMIT_REQUEST_RE='(\bcommit\b|\bamend\b|/gene\b|\bship it\b|\bland (it|this)\b)'
 
 # The paths a search command will actually visit, one per line. Position is what
 # separates them from the pattern: a content searcher spends its first non-flag word on

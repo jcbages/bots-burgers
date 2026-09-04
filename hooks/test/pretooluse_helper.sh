@@ -11,9 +11,11 @@ SESSION="${SESSION:-testsession}"
 
 decide() { # <json tool_input> -> allow|warn|deny
   local out
-  # A call the gate has nothing to say about produces no output at all.
-  out="$(printf '{"tool_input":%s,"transcript_path":%s,"session_id":"%s"}' \
-        "$1" "$(jq -Rn --arg t "$T" '$t')" "$SESSION" | "$HOOK")"
+  # A call the gate has nothing to say about produces no output at all. CWD is where
+  # the tool call was made from; a gate that reads it must be tested away from the root.
+  out="$(printf '{"tool_input":%s,"transcript_path":%s,"session_id":"%s","cwd":%s}' \
+        "$1" "$(jq -Rn --arg t "$T" '$t')" "$SESSION" "$(jq -Rn --arg c "${CWD:-}" '$c')" \
+        | "$HOOK")"
   [ -z "$out" ] && { printf 'allow'; return; }
   # Advice carries no decision, so absence of one is the signal — but only when the
   # advice is actually there. An output with neither is malformed, not permissive.

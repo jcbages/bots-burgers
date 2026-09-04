@@ -31,6 +31,7 @@ AGENTS.md ──(CLAUDE.md is "@AGENTS.md")── Claude Code
     ├── stay on main          -> hooks/block_branch_creation.sh
     ├── own-work-only commits -> hooks/session_ledger.sh -> bin/mine, bin/commit-mine
     │                            + hooks/require_scoped_commit.sh
+    ├── never discard others' -> hooks/block_discard_changes.sh
     ├── Definition of Done    -> hooks/require_dod.sh (steps 3-4 only)
     ├── no prod mutations     -> hooks/block_kamal_mutations.sh
     └── commit every session  -> nothing yet; instruction only
@@ -71,6 +72,8 @@ install.sh wires all of the above into <config dir>/settings.json (merge, never 
 - **`settings.json` is never symlinked or overwritten** — `install.sh` merges only its own keys.
 - **A commit carries only its own session's work.** `.git/index` is shared by every agent
   in the tree, so attribution is recorded as it happens by the ledger, not reconstructed.
+- **Nothing discards a working tree it shares.** A linked worktree (git dir != common dir) and
+  scratch space are the only exemptions `block_discard_changes.sh` grants.
 
 <!-- pd:instructions -->
 ## Instructions
@@ -94,6 +97,7 @@ Wired globally by `install.sh:merge_settings()`. The Bash-reading ones source
 | `block_branch_creation.sh` | PreToolUse (Bash) | denies branch creation — stay on main |
 | `block_kamal_mutations.sh` | PreToolUse (Bash) | denies Kamal prod mutations |
 | `require_scoped_commit.sh` | PreToolUse (Bash) | notes a commit sweeping the shared index |
+| `block_discard_changes.sh` | PreToolUse (Bash) | denies checkout/restore/reset --hard/stash/clean |
 | `session_ledger.sh pre\|post` | Pre/PostToolUse | snapshots each touched file, per session |
 | `ast_grep_scan.sh` | PostToolUse (Edit/Write) | structural lint, silent without `sgconfig.yml` |
 | `require_dod.sh` | Stop | reports skipped Definition-of-Done steps |
@@ -141,7 +145,7 @@ session's edits). Another agent's lines sit in both and cancel out.
 <!-- pd:tests -->
 ## Tests
 
-`hooks/test/` — a suite for each of `block_branch_creation`, `require_dod`,
+`hooks/test/` — a suite for each of `block_branch_creation`, `block_discard_changes`, `require_dod`,
 `require_domain_map`, `require_persona`, `require_scoped_commit`, plus `session_ledger_test.sh`
 for attribution. `block_kamal_mutations`, `ast_grep_scan` and the two `session_start_*` hooks
 have none. `pretooluse_helper.sh` is the shared harness (set `HOOK` and `T`, then

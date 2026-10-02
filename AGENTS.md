@@ -7,14 +7,14 @@
 - **Exception — the `/learn` prefix**: when my message starts with `/learn`, I'm passing a French word or expression I didn't understand. Explain it bilingually (English meaning + 🇫🇷 French example/nuance) so I can learn it. Applies to that one message only.
 - **Never correct my English** — corrections are for French only, and only when I wrote French.
 - **All external artifacts are always in English**, whatever language the chat is in: code, comments, commit messages, PR titles/descriptions, branch names, file contents, Linear tickets, GitHub comments.
-- When using skill-based characters (e.g., /mr-frond, /linda, /bob, /louise, etc.), **stay fully in character** while still following the rules above.
+- When using skill-based characters (e.g., `mr-frond`, `linda`, `bob`, `louise`), invoke the skill using the host's syntax (`$skill-name` in Codex, `/skill-name` in Claude Code) and **stay fully in character** while following the rules above.
 
 ---
 
 # Git Workflow (applies to all projects)
 
 - **Always work directly on `main`** — this is about *which branch*: when you commit it goes to `main`, and when a branch's work is finished, merge it back into `main`.
-- **Commit the session's work yourself, every time.** Finished work ends in a commit on `main` — run `/gene` when you would otherwise hand off, without being asked and without asking. An uncommitted session leaves no record of what was done; a committed one is the record. The PR flows are the exception — `/mr-frond` and `/teddy` commit on a branch inside their own worktree.
+- **Commit the session's work yourself, every time.** Finished work ends in a commit on `main` — invoke the `gene` skill (`$gene` in Codex; `/gene` in Claude Code) when you would otherwise hand off, without being asked and without asking. An uncommitted session leaves no record of what was done; a committed one is the record. The PR flows are the exception — the `mr-frond` and `teddy` skills commit on a branch inside their own worktree.
 - **The commit is best effort.** It may be broken, half-tested, or mid-refactor. Which versions actually work is what tags are for, not something every commit has to carry, and the branch always converges. What is *not* optional is scoping it as tightly as the tools allow: commit only this session's lines (`bin/mine`, `bin/commit-mine`), leave contested files out, and say in the report what is red or unfinished rather than letting the commit imply it is done.
 - Only create, switch to, or stay on a non-`main` branch when I **explicitly** ask for it. Absent an explicit instruction, assume `main`.
 - **A commit carries only your own work.** `.git/index` is one file every agent in a working tree shares, so `git add` there is a read-modify-write race with a commit as the payload — and once two sessions have written to a file, no after-the-fact reading of the diff can say which lines are whose. A session hook records that as it happens: for each file you touch it keeps the content when you first touched it and that content plus only your edits, so another agent's lines are in both snapshots and cancel. `bin/mine` shows your diff in a tree full of everyone's; `bin/commit-mine -m "..."` replays it onto HEAD in a private index and moves the ref with a compare-and-swap. Prefer those over `git add` + `git commit` in a shared tree — `hooks/require_scoped_commit.sh` flags the unscoped forms without stopping them, and a commit that names its paths (`git commit -m '...' -- <paths>`) is the fallback when the ledger is unavailable. A worktree has its own index and is exempt, which is why `/mr-frond` and `/teddy` commit inside one.
@@ -73,7 +73,7 @@ No implementation work (feature, bug fix, refactor) is done until every step has
 1. **Adversarial self-review of the diff.** Re-read the full `git diff` — top-down for intent, then bottom-up for bugs — against the shared bug checklist (`skills/_shared/bug-checklist.md`, plus any the project's `CLAUDE.md` names). Actively try to break the code; confirming the happy path is not reviewing.
    Read every comment in the diff and delete the ones that don't clear the **Comment budget** above — a diff that explains itself in prose is one you haven't finished naming.
 2. **Sad-path tests.** Every new behavior gets at least one adversarial test (absent field, empty collection, unauthorized direct request, mid-batch failure) alongside the happy path. Bug fixes **start red** — reproduce the bug with a failing test first, then fix to green; never adjust a test to make the implementation pass.
-3. **Fresh-eyes review.** Run `/mr-fischoeder --diff` on the session diff — it reviews the local working tree (committed *and* uncommitted), not just open PRs — and fix real findings in-loop. (A fresh-context review subagent scoped to the bug checklist also satisfies the gate.) Self-review misses the author's own bugs; a clean context does not.
+3. **Fresh-eyes review.** Invoke the `mr-fischoeder` skill with `--diff` on the session diff (Codex: `$mr-fischoeder --diff`; Claude Code: `/mr-fischoeder --diff`) — it reviews the local working tree (committed *and* uncommitted), not just open PRs — and fix real findings in-loop. (A fresh-context review subagent scoped to the bug checklist also satisfies the gate.) Self-review misses the author's own bugs; a clean context does not.
 4. **Green tests with evidence.** Run the touched tests (the stack's runner) while iterating and
    the full suite once at the end (see **Round trips**), and show the output. "It should pass" is not evidence. When there's a runtime surface (UI, endpoint), drive the actual flow — unit tests alone don't prove the feature works.
 
@@ -102,7 +102,7 @@ When the user shares a screenshot of a UI issue or a desired design, treat it as
 
 ## Codebase navigation
 
-Before exploring an unfamiliar codebase, use `/project-domain` — it reads (or, the first time,
+Before exploring an unfamiliar codebase, invoke the `project-domain` skill (Codex: `$project-domain`; Claude Code: `/project-domain`) — it reads (or, the first time,
 bootstraps) the project's `PROJECT_DOMAIN.md` map so you land on the right file instead of blind
 searching. Keep the map current as you change significant logic. A SessionStart hook
 (`hooks/session_start_domain_map.sh`) names the map for you, or tells you to bootstrap it — a

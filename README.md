@@ -13,7 +13,7 @@ ai-config/
 ├── AGENTS.md          # canonical instructions (the single source of truth)
 ├── CLAUDE.md          # one line: "@AGENTS.md" — Claude imports AGENTS.md
 ├── commands/          # Claude slash commands (fr, learn, ...)
-├── skills/            # Claude skills (characters, rails-patterns, ...)
+├── skills/            # shared Claude Code + Codex skills (characters, rails-patterns, ...)
 ├── agents/            # Claude subagents (explore: read-only codebase survey)
 ├── hooks/             # global hooks wired into settings.json
 │   ├── session_start_persona_pick.sh  # SessionStart: pick a persona to invoke
@@ -43,34 +43,40 @@ ai-config/
 ./install.sh -c ~/.claudita       # target a custom CLAUDE_CONFIG_DIR
 ./install.sh -c ~/.claude -y      # non-interactive
 ./install.sh --no-codex           # skip Codex
-./install.sh --only skills        # install only one component
+./install.sh --only skills        # install skills into Claude Code and Codex
+./install.sh --only skills --no-claude  # install skills into Codex only
 ./install.sh --only skills,commands   # ...or a few
 ```
 
-`install.sh` symlinks the shared files into the target config dir(s). Directory
-components (`skills`, `commands`, `agents`) are linked **file by file**, so any
-skills/commands you already keep in the target dir are left in place — only a
-same-named entry is touched, and that is backed up to `*.bak.<timestamp>` first.
+`install.sh` symlinks the shared files into the target config dir(s). Skill
+directories are linked **file by file** into both tools, so existing entries such
+as Codex's `.system` skills are left in place. Claude-only `commands` and `agents`
+are linked the same way. A different same-named entry is backed up to
+`*.bak.<timestamp>`; an existing link to the same source is left unchanged.
 Re-running is safe and idempotent.
 
 Use `--only` to install a subset. Valid components:
 `instructions`, `commands`, `skills`, `agents`, `settings`, `codex`
-(`settings` also wires the statusline + the Stop/SessionStart/PreToolUse/PostToolUse
-hooks). Without `--only`,
-everything is installed.
+(`settings` also wires the Claude statusline and Stop/SessionStart/PreToolUse/PostToolUse
+hooks). Without `--only`, everything is installed into each enabled tool.
 
-Run it once per config dir if you keep several (e.g. `~/.claude` and `~/.claudita`).
+Use `--no-claude` or `--no-codex` to install into just one tool. Run it once per
+Claude config dir if you keep several (e.g. `~/.claude` and `~/.claudita`).
 
 ## How Claude + Codex stay in sync
 
 - **Claude Code** reads `CLAUDE.md`, which is just `@AGENTS.md`, so it imports the
   canonical instructions.
-- **Codex** reads `AGENTS.md` directly (symlinked into `~/.codex`).
+- **Codex** reads `AGENTS.md` directly (symlinked into `~/.codex`) and discovers
+  skills from `~/.codex/skills`.
 
-Both point at the same `AGENTS.md`, so there is **one file to edit** and zero drift.
+Both tools use the same `AGENTS.md` and skill sources, so there is **one source to
+edit** and zero drift.
 
-`skills/` and `commands/` are Claude-specific — Codex has no equivalent skills
-system, so only the instructions layer is shared with it.
+Codex skills are discovered from each skill's `SKILL.md` and can be selected from
+their descriptions; invoke one explicitly with `$skill-name`. Claude Code skills
+use `/skill-name`. Commands, subagents, settings, and hooks remain Claude Code-specific
+in this installer.
 
 `settings.json` is never symlinked or overwritten: it holds account-specific keys
 (model, permissions, theme, ...). `install.sh` **merges** only the keys it owns into

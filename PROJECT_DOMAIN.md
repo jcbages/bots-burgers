@@ -1,6 +1,6 @@
 # ai-config Domain Map
 
-**Portable instructions, skills, commands and hooks for Claude Code + Codex, installed by symlink from one source of truth.** Stack: Bash + `jq`, no build step; tests are plain shell suites under `hooks/test/`, run with `hooks/test/run_all.sh`.
+**Portable instructions and skills for Claude Code + Codex, plus Claude Code commands and hooks, installed by symlink from one source of truth.** Stack: Bash + `jq`, no build step; tests are plain shell suites under `hooks/test/`, run with `hooks/test/run_all.sh`.
 
 **This file is the navigational index.** For full detail on any item, jump to its
 `<!-- pd:* -->` anchor via the index below.
@@ -24,6 +24,7 @@
 ```
 AGENTS.md ──(CLAUDE.md is "@AGENTS.md")── Claude Code
     │        └──(symlink)──────────────── Codex ~/.codex/AGENTS.md
+skills/<name>/SKILL.md ──(symlink)─────── Claude ~/.claude/skills + Codex ~/.codex/skills
     │
     │ the rules with a mechanical failure mode are backed by a hook:
     ├── persona rotation      -> hooks/session_start_persona_pick.sh + require_persona.sh
@@ -42,15 +43,16 @@ install.sh wires all of the above into <config dir>/settings.json (merge, never 
 <!-- pd:entry_points -->
 ## Entry Points
 
-- **`install.sh`** — the only executable a user runs directly. Symlinks `instructions`,
-  `commands`, `skills`, `agents` into the Claude config dir, merges the hook + statusline
-  keys into `settings.json` via `jq` (`merge_settings()`), and links `AGENTS.md` into
-  `~/.codex`. `--only <components>` installs a subset; re-running is idempotent.
+- **`install.sh`** — the only executable a user runs directly. Symlinks instructions
+  and skills into Claude Code and Codex, links Claude-only commands and agents, merges
+  the hook + statusline keys into `settings.json` via `jq` (`merge_settings()`), and
+  supports `--only <components>` and single-tool installs; re-running is idempotent.
 - **`bin/mine`** — this session's diff / file list, from the ledger.
 - **`bin/commit-mine`** — commit exactly this session's changes.
 - **`hooks/test/run_all.sh`** — the whole test suite.
 - **Slash commands** — `commands/fr.md`, `commands/learn.md`.
-- **Skills** — `skills/<name>/SKILL.md`, invoked as `/<name>`.
+- **Skills** — `skills/<name>/SKILL.md`, invoked as `/<name>` in Claude Code and
+  `$<name>` in Codex.
 
 <!-- pd:business_rules -->
 ## Key Business Rules
@@ -122,7 +124,7 @@ session's edits). Another agent's lines sit in both and cancel out.
 <!-- pd:skills -->
 ## Skills and Personas
 
-`skills/<name>/SKILL.md`, symlinked file-by-file into the config dir.
+`skills/<name>/SKILL.md`, symlinked file-by-file into both tool config dirs.
 
 - **Work personas (rotated per session):** `bob`, `tina`, `louise` — feature/bugfix work.
 - **`gene`** — fast commit to local `main`. No PR, no push. Reads the session ledger,
@@ -145,7 +147,7 @@ session's edits). Another agent's lines sit in both and cancel out.
 <!-- pd:tests -->
 ## Tests
 
-`hooks/test/` — a suite for each of `block_branch_creation`, `block_discard_changes`, `require_dod`,
+`hooks/test/` — suites for `install`, `block_branch_creation`, `block_discard_changes`, `require_dod`,
 `require_domain_map`, `require_persona`, `require_scoped_commit`, plus `session_ledger_test.sh`
 for attribution. `block_kamal_mutations`, `ast_grep_scan` and the two `session_start_*` hooks
 have none. `pretooluse_helper.sh` is the shared harness (set `HOOK` and `T`, then

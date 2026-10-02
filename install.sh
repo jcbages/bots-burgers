@@ -1,28 +1,29 @@
 #!/usr/bin/env bash
 #
-# Install this AI config into Claude Code and (optionally) Codex.
+# Install this AI config into Claude Code and Codex.
 #
-# It symlinks the shared files (instructions, skills, commands, agents) into each
-# tool's config directory and renders settings.json with the correct statusline path.
+# It symlinks shared instructions and skills into both config directories, and
+# installs Claude Code commands, agents, hooks, and statusline.
 #
-# Directory components (skills, commands, agents) are linked FILE BY FILE, so any
-# skills/commands you already have in the target dir are left untouched.
+# Directory components are linked FILE BY FILE, so unrelated target entries survive.
 #
 # Usage:
 #   ./install.sh                         # interactive: prompts for the Claude config dir
 #   ./install.sh -c ~/.claudita          # target a custom Claude config dir (CLAUDE_CONFIG_DIR)
 #   ./install.sh -c ~/.claude --no-codex # skip Codex
 #   ./install.sh -c ~/.claudita -y       # non-interactive, use given/default dirs
-#   ./install.sh --only skills           # install only the skills
+#   ./install.sh --only skills           # install skills into enabled tools
+#   ./install.sh --only skills --no-claude # install skills into Codex only
 #   ./install.sh --only skills,commands  # install only skills + commands
 #
 # Flags:
 #   -c, --config-dir DIR   Claude config dir (default: ~/.claude). Matches CLAUDE_CONFIG_DIR.
 #       --codex-dir DIR    Codex config dir (default: ~/.codex).
+#       --no-claude        Do not touch Claude Code.
 #       --no-codex         Do not touch Codex.
 #       --only LIST        Comma-separated components to install (default: all).
 #                          Valid: instructions, commands, skills, agents, settings, codex.
-#                          ('settings' also wires the statusline + Stop/SessionStart/PreToolUse/PostToolUse hooks.)
+#                          ('settings' wires the Claude statusline and hooks.)
 #   -y, --yes              Assume defaults, do not prompt.
 #   -h, --help             Show this help.
 #
@@ -37,6 +38,7 @@ ALL_COMPONENTS="instructions commands skills agents settings codex"
 CLAUDE_DIR=""
 CODEX_DIR="${HOME}/.codex"
 DO_CODEX=1
+DO_CLAUDE=1
 ASSUME_YES=0
 ONLY=""
 
@@ -46,6 +48,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -c|--config-dir) CLAUDE_DIR="$2"; shift 2 ;;
     --codex-dir)     CODEX_DIR="$2"; shift 2 ;;
+    --no-claude)     DO_CLAUDE=0; shift ;;
     --no-codex)      DO_CODEX=0; shift ;;
     --only)          ONLY="$2"; shift 2 ;;
     -y|--yes)        ASSUME_YES=1; shift ;;
@@ -70,14 +73,16 @@ want() {
   case ",$ONLY," in *",$1,"*) return 0 ;; *) return 1 ;; esac
 }
 
-# Do we need the Claude config dir at all? (codex is the only non-Claude component.)
+# Shared components can target Codex without requiring a Claude config.
 NEED_CLAUDE=0
-for c in instructions commands skills agents settings; do
-  want "$c" && NEED_CLAUDE=1
-done
+if [ "$DO_CLAUDE" = 1 ]; then
+  for c in instructions commands skills agents settings; do
+    want "$c" && NEED_CLAUDE=1
+  done
+fi
 
 # Prompt for the Claude config dir when needed, not supplied, and not unattended.
-if [ "$NEED_CLAUDE" = 1 ] && [ -z "$CLAUDE_DIR" ]; then
+if [ "$DO_CLAUDE" = 1 ] && [ "$NEED_CLAUDE" = 1 ] && [ -z "$CLAUDE_DIR" ]; then
   default_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
   if [ "$ASSUME_YES" = 1 ]; then
     CLAUDE_DIR="$default_dir"
@@ -94,13 +99,12 @@ CODEX_DIR="${CODEX_DIR/#\~/$HOME}"
 
 stamp() { date +%Y%m%d%H%M%S; }
 
-# Back up whatever is at $dest (unless it is already a symlink) and link src -> dest.
+# Back up any different destination and link src -> dest.
 link() {
   local src="$1" dest="$2"
   mkdir -p "$(dirname "$dest")"
-  if [ -L "$dest" ]; then
-    rm "$dest"
-  elif [ -e "$dest" ]; then
+  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then return 0; fi
+  if [ -L "$dest" ] || [ -e "$dest" ]; then
     local bak="${dest}.bak.$(stamp)"
     mv "$dest" "$bak"
     echo "  backup  $dest -> $bak"
@@ -114,11 +118,15 @@ link() {
 # (and those are backed up by link()).
 link_into_dir() {
   local src_dir="$1" dest_dir="$2"
-  # An older install may have symlinked the whole dir; drop that so we link into a
-  # real directory rather than into the repo itself.
   if [ -L "$dest_dir" ]; then
-    echo "  unlink  $dest_dir (was a whole-dir symlink)"
-    rm "$dest_dir"
+    local dest_target src_target
+    dest_target="$(cd "$dest_dir" 2>/dev/null && pwd -P)" || dest_target=""
+    src_target="$(cd "$src_dir" && pwd -P)"
+    [ "$dest_target" = "$src_target" ] && return 0
+    if [ -z "$dest_target" ]; then
+      echo "  unlink  $dest_dir (was a dangling symlink)"
+      rm "$dest_dir"
+    fi
   fi
   mkdir -p "$dest_dir"
   local entry
@@ -189,12 +197,12 @@ merge_settings() {
 }
 
 echo "Repo:        $REPO_DIR"
-[ "$NEED_CLAUDE" = 1 ] && echo "Claude dir:  $CLAUDE_DIR"
-if [ "$DO_CODEX" = 1 ] && want codex; then echo "Codex dir:   $CODEX_DIR"; else echo "Codex:       skipped"; fi
+if [ "$DO_CLAUDE" = 1 ] && [ "$NEED_CLAUDE" = 1 ]; then echo "Claude dir:  $CLAUDE_DIR"; else echo "Claude:      skipped"; fi
+if [ "$DO_CODEX" = 1 ] && { want codex || want instructions || want skills; }; then echo "Codex dir:   $CODEX_DIR"; else echo "Codex:       skipped"; fi
 [ -n "$ONLY" ] && echo "Only:        $ONLY"
 echo
 
-if [ "$NEED_CLAUDE" = 1 ]; then
+if [ "$DO_CLAUDE" = 1 ] && [ "$NEED_CLAUDE" = 1 ]; then
   echo "==> Claude Code"
   mkdir -p "$CLAUDE_DIR"
   if want instructions; then
@@ -207,11 +215,14 @@ if [ "$NEED_CLAUDE" = 1 ]; then
   want settings && merge_settings "$CLAUDE_DIR"
 fi
 
-if [ "$DO_CODEX" = 1 ] && want codex; then
+if [ "$DO_CODEX" = 1 ] && { want codex || want instructions || want skills; }; then
   echo
-  echo "==> Codex (instructions only; skills/settings are Claude-specific)"
+  echo "==> Codex"
   mkdir -p "$CODEX_DIR"
-  link "$REPO_DIR/AGENTS.md" "$CODEX_DIR/AGENTS.md"
+  if want instructions || want codex; then
+    link "$REPO_DIR/AGENTS.md" "$CODEX_DIR/AGENTS.md"
+  fi
+  want skills && link_into_dir "$REPO_DIR/skills" "$CODEX_DIR/skills"
   echo "  note    Codex config.toml left untouched; see codex/config.example.toml"
 fi
 

@@ -1,20 +1,7 @@
-# CSS — Semantic Classes Over Utility Sprawl
+# CSS
 
-Campfire uses semantic CSS classes (`message`, `message--emoji`, `message__body`). The same principle applies to a Tailwind project via `@apply` component classes in one stylesheet (e.g. `application.tailwind.css`):
+Follow the project's existing styling system. Reuse established components, tokens, or utility conventions before introducing another abstraction.
 
-```css
-/* One file defines the design language */
-.btn-primary { @apply inline-flex items-center px-4 py-2 bg-blue-600 text-white ... }
-.form-input  { @apply block w-full rounded-lg border border-gray-300 ... }
-.badge       { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs ... }
-```
+Extract a semantic component class when repeated styling or a stable design role benefits from a shared definition. Utilities can be appropriate for local layout; do not require every view to move styles into one global stylesheet. Use `@apply` only when it fits the installed Tailwind version and project conventions.
 
-```erb
-<%# DO: use component classes %>
-<button class="btn-primary">Save</button>
-
-<%# DON'T: raw Tailwind when a component class exists %>
-<button class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg">Save</button>
-```
-
-The principle: **one CSS file controls the design language.** Views use semantic class names. New component classes are added when a raw Tailwind pattern repeats 3+ times. Check `application.tailwind.css` before writing raw utilities.
+When changing a shared token, inspect affected consumers and verify representative rendered states. Inheritance, component defaults, and local overrides can make a theme edit ineffective. Keep surface-specific colors separate from reusable translucent tokens when their backgrounds differ.

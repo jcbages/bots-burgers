@@ -1,156 +1,73 @@
-# ai-config Domain Map
+# ai-config domain map
 
-**Portable instructions and skills for Claude Code + Codex, plus tool-specific hooks and Claude Code commands, installed from one source of truth.** Stack: Bash + `jq`, no build step; tests are plain shell suites under `hooks/test/`, run with `hooks/test/run_all.sh`.
+Portable Claude Code and Codex instructions, skills, and hooks. Bash 3.2-compatible
+shell, Git, jq, and Python 3; no build step.
 
-**This file is the navigational index.** For full detail on any item, jump to its
-`<!-- pd:* -->` anchor via the index below.
+| Topic | Anchor |
+|---|---|
+| Installation and instructions | pd:installation |
+| Skills | pd:skills |
+| Hooks and commits | pd:hooks |
+| Validation | pd:validation |
 
-## Index
-| Section | Anchor |
-|---------|--------|
-| How the pieces relate | pd:relationships |
-| Entry points | pd:entry_points |
-| Key rules and invariants | pd:business_rules |
-| Instructions (AGENTS.md) | pd:instructions |
-| Hooks | pd:hooks |
-| Session ledger + commit tooling | pd:ledger |
-| Skills and personas | pd:skills |
-| Shell (statusline, Stop reporting) | pd:shell |
-| Tests | pd:tests |
+<!-- pd:installation -->
+## Installation and instructions
 
-<!-- pd:relationships -->
-## Relationship Map
-
-```
-AGENTS.md ──(CLAUDE.md is "@AGENTS.md")── Claude Code
-    │        └──(symlink)──────────────── Codex ~/.codex/AGENTS.md
-skills/<name>/SKILL.md ──(symlink)─────── Claude ~/.claude/skills + Codex ~/.codex/skills
-    │
-    │ the rules with a mechanical failure mode are backed by a hook:
-    ├── persona rotation      -> hooks/session_start_persona_pick.sh + require_persona.sh
-    ├── domain map first      -> hooks/session_start_domain_map.sh + require_domain_map.sh
-    ├── stay on main          -> hooks/block_branch_creation.sh
-    ├── own-work-only commits -> hooks/session_ledger.sh -> bin/mine, bin/commit-mine
-    │                            + hooks/require_scoped_commit.sh
-    ├── never discard others' -> hooks/block_discard_changes.sh
-    ├── Definition of Done    -> hooks/require_dod.sh (steps 3-4 only)
-    ├── no prod mutations     -> hooks/block_kamal_mutations.sh
-    └── commit every session  -> nothing yet; instruction only
-
-install.sh merges Claude hooks into settings.json and Codex hooks into hooks.json
-```
-
-<!-- pd:entry_points -->
-## Entry Points
-
-- **`install.sh`** — the only executable a user runs directly. Symlinks instructions
-  and skills into Claude Code and Codex, links Claude-only commands and agents, merges
-  hooks into Claude `settings.json` and Codex `hooks.json` via `jq`, and supports
-  `--only <components>` and single-tool installs; re-running is idempotent.
-- **`bin/mine`** — this session's diff / file list, from the ledger.
-- **`bin/commit-mine`** — commit exactly this session's changes.
-- **`hooks/test/run_all.sh`** — the whole test suite.
-- **Slash commands** — `commands/fr.md`, `commands/learn.md`.
-- **Skills** — `skills/<name>/SKILL.md`, invoked as `/<name>` in Claude Code and
-  `$<name>` in Codex.
-
-<!-- pd:business_rules -->
-## Key Business Rules
-
-- **`AGENTS.md` is the single source of truth**; `CLAUDE.md` is one line (`@AGENTS.md`).
-  A rule that has a hook, changed in only one of the two places, is drift. Not every rule
-  has one — see the relationship map for which do.
-- **The commit gates advise; four hooks still deny.** `require_scoped_commit.sh` and
-  `require_dod.sh` name their hazard and let the work through (`hooks/lib/advice.sh` carries
-  both output shapes). `block_branch_creation.sh`, `block_kamal_mutations.sh`,
-  `require_persona.sh` and `require_domain_map.sh` refuse outright.
-- **`Stop` feedback must never reach the model** (`advise_user`), or it resumes the very
-  turn the user is ending. `PreToolUse` feedback may (`advise_tool`).
-- **Role is not provenance.** Hook notes, subagent reports and command output all wear
-  `role: "user"` in the transcript, so a gate that trusts the role licenses itself off its own
-  message. `GENUINE_USER_TEXT` (`hooks/lib/bash_command.sh`) is the shared filter, but only
-  `require_domain_map.sh` uses it: `require_dod.sh` carries its own inline copy and
-  `require_persona.sh` greps the raw transcript.
-- **Tool settings are never symlinked or overwritten** — `install.sh` merges only its
-  own hook entries into Claude `settings.json` and Codex `hooks.json`.
-- **A commit carries only its own session's work.** `.git/index` is shared by every agent
-  in the tree, so attribution is recorded as it happens by the ledger, not reconstructed.
-- **Nothing discards a working tree it shares.** A linked worktree (git dir != common dir) and
-  scratch space are the only exemptions `block_discard_changes.sh` grants.
-
-<!-- pd:instructions -->
-## Instructions
-
-`AGENTS.md` — language rules, git workflow, code philosophy (DHH craftsmanship +
-Hickey's "Simple Made Easy"), and working standards (Definition of Done, handing off,
-blast radius, codebase navigation, round trips). `CLAUDE.md` imports it.
-
-<!-- pd:hooks -->
-## Hooks
-
-Claude hooks are wired by `install.sh:merge_settings()`; Codex session ledger hooks
-are wired by `install.sh:merge_codex_hooks()`. The Bash-reading ones source
-`hooks/lib/bash_command.sh`; the two that advise rather than deny source `hooks/lib/advice.sh`.
-
-| Hook | Event | What it does |
-|------|-------|--------------|
-| `session_start_persona_pick.sh` | SessionStart | picks a rotating work persona |
-| `session_start_domain_map.sh` | SessionStart | names this file, or asks for it |
-| `require_persona.sh` | PreToolUse (Edit/Write/Bash) | denies source edits before a persona |
-| `require_domain_map.sh` | PreToolUse (Grep/Glob/Bash) | denies a blind source sweep |
-| `block_branch_creation.sh` | PreToolUse (Bash) | denies branch creation — stay on main |
-| `block_kamal_mutations.sh` | PreToolUse (Bash) | denies Kamal prod mutations |
-| `require_scoped_commit.sh` | PreToolUse (Bash) | notes a commit sweeping the shared index |
-| `block_discard_changes.sh` | PreToolUse (Bash) | denies checkout/restore/reset --hard/stash/clean |
-| `session_ledger.sh pre\|post` | Pre/PostToolUse | snapshots each touched file, per session |
-| `ast_grep_scan.sh` | PostToolUse (Edit/Write) | structural lint, silent without `sgconfig.yml` |
-| `require_dod.sh` | Stop | reports skipped Definition-of-Done steps |
-
-`hooks/lib/bash_command.sh` holds the shared parsing every Bash gate needs:
-`strip_heredoc_bodies` (a heredoc body is data, not commands), `source_write_targets`,
-`git_working_dir`, `sweep_paths`, `domain_map_path`, `GIT_COMMIT_VERB`, `GENUINE_USER_TEXT`.
-
-<!-- pd:ledger -->
-## Session Ledger + Commit Tooling
-
-`hooks/lib/ledger.sh` + `hooks/session_ledger.sh` keep, per file a session touches, an
-`origin` blob (content when first touched) and a `shadow` blob (origin plus only this
-session's edits). Another agent's lines sit in both and cancel out.
-
-- `bin/mine` — this session's diff (`--files` for paths only). Contested files, where two
-  sessions rewrote the same lines, are reported and never committed.
-- `bin/commit-mine` — replays `origin -> shadow` onto HEAD in a *private* index
-  (`GIT_INDEX_FILE`), then moves the ref with a compare-and-swap. `--dry-run` prints what
-  would land and what is skipped. HEAD moving underneath is absorbed (3-way merge).
+- `install.sh` links shared resources and merges only owned hook registrations.
+- `instructions/AGENTS.md` supplies global preferences to both hosts;
+  `instructions/CLAUDE.md` imports the neighboring AGENTS.md for Claude.
+- Root `AGENTS.md` and `CLAUDE.md` describe this repository only, avoiding a second
+  copy of global preferences when working here.
+- Host configuration and unrelated permission choices must survive installation.
+- `README.md` documents flags, installation, hook trust, and workflow limitations.
+- `codex/config.example.toml` is optional and never overwrites live model settings.
 
 <!-- pd:skills -->
-## Skills and Personas
+## Skills
 
-`skills/<name>/SKILL.md`, symlinked file-by-file into both tool config dirs.
+`skills/<name>/SKILL.md` is the entrypoint in either host. References resolve relative
+to that directory, including `../_shared/`.
 
-- **Work personas (rotated per session):** `bob`, `tina`, `louise` — feature/bugfix work.
-- **`gene`** — fast commit to local `main`. No PR, no push. Reads the session ledger,
-  runs the Definition-of-Done spot-check, optionally logs a Linear ticket.
-- **`mr-frond`** — packages uncommitted work into a PR on a worktree.
-- **`teddy`** — fixes PR review feedback, rebases stale PRs.
-- **`mr-fischoeder`** — fresh-eyes review of the working-tree diff or an open PR.
-- **`linda`** — Linear tickets only.
-- **`project-domain`** — this map's own skill: bootstrap and keep it filled.
-- **`rails-patterns`** — Campfire/Basecamp Rails reference, with `references/*.md`.
-- **`_shared/`** — `bug-checklist.md` and `project-config.md`, referenced by every persona.
-- **`agents/explore.md`** — read-only survey subagent.
+- `bob`, `tina`, `louise`: optional implementation voices.
+- `gene`: scoped local commit; push only on explicit request; truthful ticket state.
+- `mr-frond`: package a recorded session delta into a PR.
+- `teddy`: address actionable PR feedback and conflicts, stopping for external reviews.
+- `mr-fischoeder`: scoped review with concrete failure evidence.
+- `project-domain`: consult or maintain a concise map when useful.
+- `rails-patterns`: conditional references for Basecamp-style Rails conventions.
+- `_shared/bug-checklist.md`: universal review questions; specialized rules stay scoped.
+- `agents/explore.md`: Claude read-only survey, returning conclusions and citations.
 
-<!-- pd:shell -->
-## Shell
+<!-- pd:hooks -->
+## Hooks and commits
 
-- `shell/statusline.sh` — the status line renderer (`statusLine` in settings.json).
-- `shell/config_status.sh` — Stop hook: reports uncommitted changes *in this repo*.
+- `hooks/block_branch_creation.sh`, `block_discard_changes.sh`, and
+  `block_kamal_mutations.sh`: Claude action guards.
+- `hooks/require_scoped_commit.sh`: advisory note for shared-index commits.
+- `hooks/session_start_domain_map.sh`: optional map location hint, never bootstrap demand.
+- `hooks/ast_grep_scan.sh`: structural lint when a project has `sgconfig.yml`.
+- `hooks/require_persona.sh`, `require_domain_map.sh`, `require_dod.sh`,
+  `session_start_persona_pick.sh`, and `shell/config_status.sh`: retired compatibility
+  entrypoints; installation removes their registrations.
+- `hooks/session_ledger.sh`, `hooks/lib/ledger_capture.py`, `hooks/lib/ledger.sh`:
+  reconstruct explicit edits, verify outcomes, and lock per-session state. Shell
+  mutations and unsupported patch forms are not automatically attributed. Codex
+  UserPromptSubmit supplies the session ID as context for explicit ledger commands;
+  PreToolUse does not change command permissions.
+- `bin/mine`: inspect the session record; `bin/commit-mine`: private-index replay and
+  compare-and-swap commit. Neither dirty filenames nor command-duration snapshots
+  establish ownership. Unsupported or ambiguous edits must not be committed as verified.
+- `hooks/lib/bash_command.sh`: shared command/path parsing for action guards.
+- `shell/statusline.sh`: optional Claude display.
 
-<!-- pd:tests -->
-## Tests
+Preserve other writers' files and index. Serialize overlapping writes; the commit
+index is private, but the working tree is shared. Hook protocols and coverage differ
+between hosts, so verify real payload shapes before changing installation or recording.
 
-`hooks/test/` — suites for `install`, `block_branch_creation`, `block_discard_changes`, `require_dod`,
-`require_domain_map`, `require_persona`, `require_scoped_commit`, plus `session_ledger_test.sh`
-for attribution. `block_kamal_mutations`, `ast_grep_scan` and the two `session_start_*` hooks
-have none. `pretooluse_helper.sh` is the shared harness (set `HOOK` and `T`, then
-`expect_*` / `report`). Run everything with `hooks/test/run_all.sh`.
+<!-- pd:validation -->
+## Validation
+
+`hooks/test/*_test.sh` suites run in temporary repositories/config directories.
+Run the affected suite while iterating, then `bash hooks/test/run_all.sh` for shared
+infrastructure changes. Installation tests cover preservation, idempotence, and
+paths requiring quoting. Ledger tests cover attribution and conservative failures.

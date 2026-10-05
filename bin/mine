@@ -15,11 +15,15 @@ DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=hooks/lib/ledger.sh
 . "$DIR/hooks/lib/ledger.sh"
 
+if [ "${LEDGER_LOCKED:-}" != 1 ]; then
+  exec python3 "$DIR/hooks/lib/ledger_capture.py" run "$0" "$@"
+fi
+
 ledger_cd_root || { echo "mine: not a git repo" >&2; exit 1; }
 ledger_dir >/dev/null 2>&1 || { echo "mine: not a git repo, or no session id" >&2; exit 1; }
 
 paths="$(ledger_paths)"
-if [ -z "$paths" ]; then echo "mine: this session has changed nothing"; exit 0; fi
+if [ -z "$paths" ]; then echo "mine: no verified explicit edits recorded (shell edits are not tracked)"; exit 0; fi
 
 case "${1:-}" in
   --files) printf '%s\n' "$paths"; exit 0 ;;
@@ -27,7 +31,7 @@ esac
 
 contested="$(ledger_contested)"
 [ -n "$contested" ] && {
-  echo "⚠ could not be separated from another session's edits (will not be committed):"
+  echo "⚠ unverified or could not be separated from another session's edits (will not be committed):"
   printf '   %s\n' $contested; echo
 }
 

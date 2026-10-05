@@ -22,6 +22,18 @@ check "$ROOT/skills/project-domain" "$(readlink "$W/codex/skills/project-domain"
 check "preserve me" "$(cat "$W/codex/skills/.system/marker")" "existing unrelated Codex skills remain"
 check "$ROOT/skills/project-domain" "$(readlink "$W/claude/skills/project-domain")" "Claude still gets the project-domain skill"
 
+mkdir -p "$W/claude-settings"
+jq -n --arg old "$ROOT/hooks/require_persona.sh" '{permissions:{defaultMode:"default"},statusLine:{type:"command",command:"custom-status"},hooks:{PreToolUse:[{matcher:"Bash",hooks:[{type:"command",command:"custom-pre"},{type:"command",command:$old}]}],Stop:[{hooks:[{type:"command",command:"custom-stop"}]}]}}' > "$W/claude-settings/settings.json"
+"$ROOT/install.sh" -y --only settings --no-codex -c "$W/claude-settings" >/dev/null
+check "default" "$(jq -r '.permissions.defaultMode' "$W/claude-settings/settings.json")" "Claude preserves permission choice"
+check "custom-status" "$(jq -r '.statusLine.command' "$W/claude-settings/settings.json")" "Claude preserves custom statusline"
+check "custom-pre" "$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$W/claude-settings/settings.json")" "Claude preserves unrelated tool hooks"
+check "custom-stop" "$(jq -r '.hooks.Stop[0].hooks[0].command' "$W/claude-settings/settings.json")" "Claude preserves unrelated stop hooks"
+check "0" "$(jq '[.hooks[][] | .hooks[] | select(.command | test("require_persona|require_domain_map|require_dod|config_status|session_start_persona"))] | length' "$W/claude-settings/settings.json")" "Claude removes legacy ritual hooks"
+cp "$W/claude-settings/settings.json" "$W/claude-first.json"
+"$ROOT/install.sh" -y --only settings --no-codex -c "$W/claude-settings" >/dev/null
+check "0" "$(cmp -s "$W/claude-first.json" "$W/claude-settings/settings.json"; echo $?)" "Claude settings merge is idempotent"
+
 mkdir -p "$W/codex-settings"
 cat > "$W/codex-settings/hooks.json" <<'JSON'
 {
@@ -32,19 +44,29 @@ cat > "$W/codex-settings/hooks.json" <<'JSON'
   }
 }
 JSON
+jq --arg old "'$ROOT/hooks/session_ledger.sh' codex-start" '.hooks.SessionStart[0].hooks += [{type:"command",command:$old}]' "$W/codex-settings/hooks.json" > "$W/seed.json"
+mv "$W/seed.json" "$W/codex-settings/hooks.json"
+jq --arg old "\"$ROOT/hooks/session_ledger.sh\" pre" --arg current "\"$ROOT/hooks/session_ledger.sh\" codex-pre" '.hooks.PreToolUse += [{matcher:"Bash|apply_patch",hooks:[{type:"command",command:$old},{type:"command",command:$current}]}]' "$W/codex-settings/hooks.json" > "$W/seed.json"
+mv "$W/seed.json" "$W/codex-settings/hooks.json"
 printf 'leave this temp target alone\n' > "$W/hooks-temp-target"
 ln -s "$W/hooks-temp-target" "$W/codex-settings/hooks.json.tmp"
 "$ROOT/install.sh" -y --only settings --no-claude --codex-dir "$W/codex-settings" >/dev/null
 check "keep this" "$(jq -r '.description' "$W/codex-settings/hooks.json")" "Codex hook merge preserves file metadata"
 check "keep-this-hook" "$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$W/codex-settings/hooks.json")" "Codex hook merge preserves unrelated events"
+check "0" "$(jq '[.hooks.SessionStart[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" codex-start"))] | length' "$W/codex-settings/hooks.json")" "Codex removes retired ledger session hooks"
+check "'$ROOT/hooks/session_ledger.sh' codex-context" "$(jq -r '.hooks.UserPromptSubmit[0].hooks[0].command' "$W/codex-settings/hooks.json")" "Codex supplies ledger context on user prompts"
+check "apply_patch" "$(jq -r '.hooks.PreToolUse[-1].matcher' "$W/codex-settings/hooks.json")" "Codex ledger pre-hooks run only for patches"
+check "apply_patch" "$(jq -r '.hooks.PostToolUse[-1].matcher' "$W/codex-settings/hooks.json")" "Codex ledger post-hooks run only for patches"
 check "existing-pre-hook" "$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$W/codex-settings/hooks.json")" "Codex hook merge preserves existing tool hooks"
-check "\"$ROOT/hooks/session_ledger.sh\" pre" "$(jq -r '.hooks.PreToolUse[-1].hooks[0].command' "$W/codex-settings/hooks.json")" "Codex installs its ledger pre-hook"
-check "\"$ROOT/hooks/session_ledger.sh\" post" "$(jq -r '.hooks.PostToolUse[-1].hooks[0].command' "$W/codex-settings/hooks.json")" "Codex installs its ledger post-hook"
+check "'$ROOT/hooks/session_ledger.sh' codex-pre" "$(jq -r '.hooks.PreToolUse[-1].hooks[0].command' "$W/codex-settings/hooks.json")" "Codex installs its ledger pre-hook"
+check "'$ROOT/hooks/session_ledger.sh' post" "$(jq -r '.hooks.PostToolUse[-1].hooks[0].command' "$W/codex-settings/hooks.json")" "Codex installs its ledger post-hook"
 check "leave this temp target alone" "$(cat "$W/hooks-temp-target")" "Codex merge does not follow a predictable temp-file symlink"
 check "1" "$([ -L "$W/codex-settings/hooks.json.tmp" ] && echo 1 || echo 0)" "Codex merge leaves unrelated temp-path symlinks intact"
 
 "$ROOT/install.sh" -y --only settings --no-claude --codex-dir "$W/codex-settings" >/dev/null
-check "1" "$(jq '[.hooks.PreToolUse[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" pre"))] | length' "$W/codex-settings/hooks.json")" "rerunning settings install does not duplicate Codex pre-hooks"
+check "1" "$(jq '[.hooks.PreToolUse[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" codex-pre"))] | length' "$W/codex-settings/hooks.json")" "rerunning settings install does not duplicate Codex pre-hooks"
+check "0" "$(jq '[.hooks.SessionStart[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" codex-start"))] | length' "$W/codex-settings/hooks.json")" "rerunning settings install keeps retired ledger hooks removed"
+check "1" "$(jq '[.hooks.UserPromptSubmit[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" codex-context"))] | length' "$W/codex-settings/hooks.json")" "rerunning settings install does not duplicate Codex prompt hooks"
 check "1" "$(jq '[.hooks.PostToolUse[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" post"))] | length' "$W/codex-settings/hooks.json")" "rerunning settings install does not duplicate Codex post-hooks"
 
 mkdir -p "$W/codex-invalid"
@@ -117,6 +139,32 @@ backup_target=""
 check "1" "${#backups[@]}" "a conflicting skill symlink gets a backup"
 check "$W/custom-project-domain" "$backup_target" "the backup retains the custom skill target"
 check "$ROOT/skills/project-domain" "$(readlink "$W/codex-collision/skills/project-domain")" "the configured skill takes precedence after backup"
+
+"$ROOT/install.sh" -y --only instructions -c "$W/claude-instructions" --codex-dir "$W/codex-instructions" >/dev/null
+check "$ROOT/instructions/AGENTS.md" "$(readlink "$W/claude-instructions/AGENTS.md")" "Claude global instructions use the canonical global file"
+check "$ROOT/instructions/CLAUDE.md" "$(readlink "$W/claude-instructions/CLAUDE.md")" "Claude global entry point uses the global include"
+check "$ROOT/instructions/AGENTS.md" "$(readlink "$W/codex-instructions/AGENTS.md")" "Codex global instructions use the canonical global file"
+
+mkdir -p "$W/claude-invalid"
+printf '{invalid json\n' > "$W/claude-invalid/settings.json"
+if "$ROOT/install.sh" -y --only settings --no-codex -c "$W/claude-invalid" >/dev/null 2>&1; then result=success; else result=failure; fi
+check failure "$result" "invalid Claude settings stop installation"
+check '{invalid json' "$(cat "$W/claude-invalid/settings.json")" "invalid Claude settings remain intact"
+mkdir -p "$W/claude-linked"
+printf '{}\n' > "$W/claude-target.json"
+ln -s "$W/claude-target.json" "$W/claude-linked/settings.json"
+if "$ROOT/install.sh" -y --only settings --no-codex -c "$W/claude-linked" >/dev/null 2>&1; then result=success; else result=failure; fi
+check failure "$result" "Claude settings symlinks are refused"
+check '{}' "$(cat "$W/claude-target.json")" "Claude settings symlink target remains intact"
+
+quoted_repo="$W/repo ' with spaces"
+mkdir -p "$quoted_repo"
+cp "$ROOT/install.sh" "$quoted_repo/install.sh"
+ln -s "$ROOT/hooks" "$quoted_repo/hooks"
+"$quoted_repo/install.sh" -y --only settings --no-codex -c "$W/quoted-settings" >/dev/null
+command="$(jq -r '.hooks.SessionStart[-1].hooks[0].command' "$W/quoted-settings/settings.json")"
+if printf '{}' | bash -c "$command" >/dev/null 2>&1; then result=success; else result=failure; fi
+check success "$result" "hook commands execute from a path containing spaces and an apostrophe"
 
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

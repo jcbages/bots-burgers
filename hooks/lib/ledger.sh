@@ -1,24 +1,5 @@
 #!/usr/bin/env bash
-#
-# Per-session record of what THIS session changed, in a working tree that many
-# sessions share.
-#
-# A shared working tree destroys authorship: once two agents have written to a
-# file it is one blob, and no after-the-fact analysis can say which lines came
-# from whom. So authorship has to be recorded as it happens. For each file a
-# session touches we keep two blobs:
-#
-#   origin  the file as it stood when this session first touched it
-#   shadow  origin plus ONLY this session's edits
-#
-# A tool call's own delta is pre->post around that call; folding it into shadow
-# with a 3-way merge leaves everyone else's work out, because their edits are in
-# both pre and post and so cancel. `git diff origin shadow` is then this
-# session's change, and merging origin->shadow onto HEAD is its commit.
-#
-# 3-way merge rather than a stored patch: a patch goes stale the moment another
-# session shifts the line numbers, and fails where a merge absorbs the shift and
-# reports a real conflict as a conflict.
+# Stores only edits reconstructed from explicit tool inputs and confirmed on disk.
 
 set -u
 
@@ -58,30 +39,6 @@ ledger_cd_root() {
   cd "$_LEDGER_ROOT" || return 1
 }
 
-# Every path differing from HEAD, tracked or not. quotePath off so a non-ASCII
-# name arrives as itself; a newline in a filename is out of scope and would need
-# -z parsing everywhere it is read.
-_ledger_changed_paths() {
-  git rev-parse --verify -q HEAD >/dev/null 2>&1 || return 0
-  { git -c core.quotePath=false diff --name-only HEAD 2>/dev/null
-    git -c core.quotePath=false ls-files --others --exclude-standard 2>/dev/null
-  } | sort -u
-}
-
-# "path<TAB>blob" for each changed path; blob is "-" when the file is gone.
-# One hash-object for the whole set — a process per file is the difference
-# between a hook you keep and one you turn off.
-ledger_snapshot() {
-  local all exist
-  all="$(_ledger_changed_paths)"
-  [ -n "$all" ] || return 0
-  exist="$(printf '%s\n' "$all" | while IFS= read -r p; do [ -e "$p" ] && printf '%s\n' "$p"; done)"
-  [ -n "$exist" ] && paste -d'	' \
-    <(printf '%s\n' "$exist") \
-    <(printf '%s\n' "$exist" | git hash-object -w --stdin-paths)
-  printf '%s\n' "$all" | while IFS= read -r p; do [ -e "$p" ] || printf '%s\t-\n' "$p"; done
-}
-
 # HEAD's version of a path, or "-" when HEAD has no such file.
 _ledger_head_blob() { git rev-parse -q --verify "HEAD:$1" 2>/dev/null || printf -- '-'; }
 
@@ -107,11 +64,11 @@ ledger_merge3() { # <current> <base> <other>
   [ "$rc" -eq 0 ]
 }
 
-# state is TSV: path, origin, shadow, status ("ok" or "contested").
+# state is TSV: path, origin, shadow, status ("verified" or "contested").
 ledger_get() { # <path> -> "origin<TAB>shadow<TAB>status", empty if not this session's
   local s; s="$(ledger_state)"
   [ -f "$s" ] || return 0
-  awk -F'\t' -v p="$1" '$1==p {print $2 "\t" $3 "\t" $4; exit}' "$s"
+  awk -F'\t' -v p="$1" '$1==p {print $2 "\t" $3 "\t" $4 "\t" $5; exit}' "$s"
 }
 
 ledger_put() { # <path> <origin> <shadow> <status>
@@ -125,7 +82,7 @@ ledger_put() { # <path> <origin> <shadow> <status>
 
 ledger_contested() { # paths this session could not cleanly separate
   local s; s="$(ledger_state)"
-  [ -f "$s" ] && awk -F'\t' '$4=="contested" {print $1}' "$s" || true
+  [ -f "$s" ] && awk -F'\t' '$4!="verified" {print $1}' "$s" || true
 }
 
 ledger_drop() { # <path...>

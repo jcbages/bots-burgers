@@ -1,13 +1,13 @@
-## Summary
-<2-4 bullet points explaining what was done and why>
+## Change
 
-## Changes
-<list of key files/areas modified>
+<The problem and resulting behavior; include only details needed to assess this change.>
 
-## Test plan
-- [ ] <specific things to test>
-- [ ] <edge cases to verify>
+## Validation
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+<Checks actually run and their results; name any failures or checks not run.>
 
-Linear: <TICKET>
+## Limits
+
+<Material exclusions or follow-up work, if any. Remove this section when unnecessary.>
+
+<Optional linked Linear ticket.>

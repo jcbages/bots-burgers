@@ -1,83 +1,9 @@
-# JavaScript Patterns
+# JavaScript and Stimulus
 
-## Stimulus Controllers
+Use the project's existing frontend stack. Do not add Alpine or migrate to Stimulus merely to follow this reference.
 
-- **Private fields** (`#`) for encapsulation — never expose internal state
-- **Static declarations**: `targets`, `values`, `classes`, `outlets`
-- **Event-driven**: Actions wired via `data-action` in HTML
-- **Outlet pattern**: Controllers communicate via outlets, not global events
+Stimulus controllers coordinate DOM behavior through targets, values, classes, and actions. Keep local UI behavior local; extract plain JavaScript functions or classes when complex or reusable behavior benefits from independent reasoning and testing. A new class is not required for each controller method.
 
-```javascript
-import { Controller } from "@hotwired/stimulus"
+Use private fields for internal state when appropriate, keeping methods invoked by Stimulus actions accessible. Prefer outlets for explicit controller relationships and dispatched events for loose coupling or integration with non-Stimulus consumers. Neither mechanism is universally preferred.
 
-export default class extends Controller {
-  static classes = ["toolbar"]
-  static targets = [ "clientid", "fields", "text" ]
-  static values = { roomId: Number }
-  static outlets = [ "messages" ]
-
-  #files = []
-
-  connect() {
-    if (!this.#usingTouchDevice) {
-      onNextEventLoopTick(() => this.textTarget.focus())
-    }
-  }
-
-  submit(event) {
-    event.preventDefault()
-    if (!this.fieldsTarget.disabled) {
-      this.#submitFiles()
-      this.#submitMessage()
-    }
-  }
-
-  get #usingTouchDevice() {
-    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  }
-
-  async #submitMessage() {
-    if (this.#validInput()) {
-      const clientMessageId = this.#generateClientId()
-      await this.messagesOutlet.insertPendingMessage(clientMessageId, this.textTarget)
-      this.element.requestSubmit()
-      this.#reset()
-    }
-  }
-
-  #generateClientId() {
-    return Math.random().toString(36).slice(2)
-  }
-}
-```
-
-## JS Models for Complex Logic
-
-Complex logic is extracted into plain JS classes in `app/javascript/models/`:
-
-```javascript
-export default class MessageFormatter {
-  #userId
-  #classes
-
-  constructor(userId, classes) {
-    this.#userId = userId
-    this.#classes = classes
-  }
-
-  format(message, threadstyle) {
-    this.#setMeClass(message)
-    this.#highlightMentions(message)
-    this.#threadMessage(message)
-    this.#setFirstOfDayClass(message)
-    this.#makeVisible(message)
-  }
-
-  #setMeClass(message) {
-    const isMe = message.dataset.userId == this.#userId
-    message.classList.toggle(this.#classes.me, isMe)
-  }
-}
-```
-
-Pattern: Stimulus controllers are thin orchestrators. Complex logic lives in JS model classes.
+Account for reconnects: release listeners, observers, and timers in `disconnect` when they outlive the controller, and avoid duplicating subscriptions. For async work, handle rejected operations and results arriving after the relevant DOM or state changed.

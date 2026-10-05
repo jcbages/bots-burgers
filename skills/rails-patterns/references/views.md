@@ -1,53 +1,7 @@
-# View Patterns
+# Views and helpers
 
-## Fragment Caching
+Keep templates readable using the project's partials, components, and helpers. Extract complex reusable markup or data-attribute wiring when it clarifies the template; a simple inline attribute needs no helper.
 
-```erb
-<% cache message do %>
-  <%= message_tag message do %>
-    ...
-  <% end %>
-<% end %>
-```
+Use fragment caching when rendering cost justifies it and the key captures every dependency that can change the output. Include tenant/user context when the rendered content varies by it; do not share personalized fragments under a model-only key.
 
-## Helper-Generated HTML with Data Attributes
-
-Complex data-attribute wiring lives in helpers, not views:
-
-```ruby
-module MessagesHelper
-  def message_area_tag(room, &)
-    tag.div id: "message-area", class: "message-area", data: {
-      controller: "messages presence drop-target",
-      action: [ messages_actions, drop_target_actions, presence_actions ].join(" "),
-      messages_page_url_value: room_messages_url(room)
-    }, &
-  end
-
-  def message_tag(message, &)
-    tag.div id: dom_id(message),
-      class: "message #{"message--emoji" if message.plain_text_body.all_emoji?}",
-      data: {
-        controller: "reply",
-        user_id: message.creator_id,
-        message_id: message.id,
-        messages_target: "message"
-      }, &
-  end
-end
-```
-
-This keeps views clean — complex data attributes are composed in Ruby, not scattered across ERB.
-
-## Layout with Named Yields
-
-```erb
-<nav id="nav"><%= yield :nav %></nav>
-<main id="main-content">
-  <%= yield %>
-  <footer id="footer"><%= yield :footer %></footer>
-</main>
-<aside id="sidebar"><%= yield :sidebar %></aside>
-```
-
-Views provide content for named sections via `content_for`.
+Use layout yields and `content_for` where the project already organizes shared page regions that way. Escape untrusted content and preserve accessible labels and action semantics while refactoring markup.

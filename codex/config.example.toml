@@ -1,8 +1,5 @@
-# Example Codex config. Copy to ~/.codex/config.toml and adjust.
-#
-# install.sh does NOT symlink this file, because config.toml is machine/account
-# specific and Codex may already manage it. install.sh links shared AGENTS.md
-# instructions and skills into ~/.codex/AGENTS.md and ~/.codex/skills/.
+# Optional Codex settings. The installer leaves your live config.toml untouched.
+# Choose models and reasoning effort in the host for the task at hand.
+# Shared instructions and skills are installed independently of these settings.
 
-# model = "gpt-5-codex"
 # approval_policy = "on-request"

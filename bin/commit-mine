@@ -1,22 +1,16 @@
 #!/usr/bin/env bash
+# Commit verified explicit edits through a private index; never write the shared index.
 #
-# Commit exactly this session's changes, and nothing another session wrote.
-#
-# For each file the session ledger tracks, `origin -> shadow` is this session's
-# contribution; replaying that onto HEAD's current content is its commit. The
-# tree is assembled in a private index, so .git/index — shared with every other
-# agent in this tree — is never written until the commit has landed. The ref
-# moves with a compare-and-swap, so a session that committed meanwhile is a loud
-# failure rather than a race.
-#
-#   commit-mine -m "Add the thing"          commit everything this session changed
-#   commit-mine -m "..." path/a path/b      only those paths
-#   commit-mine --dry-run                   show what would land
-#
+#   commit-mine -m "Add the thing"       commit recorded edits
+#   commit-mine -m "..." path/a path/b   only those recorded paths
+#   commit-mine --dry-run                show what would land
+# Shell edits and unsupported operations require separate review.
 set -u
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=hooks/lib/ledger.sh
 . "$DIR/hooks/lib/ledger.sh"
+
+ORIGINAL_ARGS=("$@")
 
 MSG=""; DRY=0; ONLY=()
 while [ $# -gt 0 ]; do
@@ -24,11 +18,15 @@ while [ $# -gt 0 ]; do
     -m|--message)  MSG="$2"; shift 2 ;;
     -F|--file)     MSG="$(cat "$2")"; shift 2 ;;
     -n|--dry-run)  DRY=1; shift ;;
-    -h|--help)     sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)     sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)            echo "commit-mine: unknown flag $1" >&2; exit 2 ;;
     *)             ONLY+=("$1"); shift ;;
   esac
 done
+
+if [ "${LEDGER_LOCKED:-}" != 1 ]; then
+  exec python3 "$DIR/hooks/lib/ledger_capture.py" run "$0" "${ORIGINAL_ARGS[@]}"
+fi
 
 # After the arguments, so -F reads its file where it was typed. Paths given are
 # matched against the ledger's keys, which are repo-relative either way.
@@ -38,7 +36,7 @@ base="$(git rev-parse -q --verify HEAD)" || { echo "commit-mine: no commits yet"
 
 paths="$(ledger_paths)"
 [ ${#ONLY[@]} -gt 0 ] && paths="$(printf '%s\n' "${ONLY[@]}")"
-[ -n "$paths" ] || { echo "commit-mine: this session has changed nothing"; exit 0; }
+[ -n "$paths" ] || { echo "commit-mine: no verified explicit edits recorded (shell edits are not tracked)"; exit 0; }
 
 gd="$(git rev-parse --absolute-git-dir)"
 idx="$gd/commit-mine-index.$$"
@@ -50,8 +48,8 @@ while IFS= read -r p; do
   [ -n "$p" ] || continue
   entry="$(ledger_get "$p")"
   [ -n "$entry" ] || { skipped+=("$p — not this session's"); continue; }
-  IFS=$'\t' read -r origin shadow status <<< "$entry"
-  [ "$status" = contested ] && { skipped+=("$p — tangled with another session's edit"); continue; }
+  IFS=$'\t' read -r origin shadow status origin_mode <<< "$entry"
+  [ "$status" = verified ] || { skipped+=("$p — unverified or tangled with another session's edit"); continue; }
   # Nothing of this session's to replay. Replayed anyway onto a HEAD that has
   # since dropped the file, the no-op merges into emptiness and resurrects it.
   [ "$origin" = "$shadow" ] && { skipped+=("$p — unchanged by this session"); continue; }
@@ -60,7 +58,9 @@ while IFS= read -r p; do
     # The tree outranks the record. A file that is on disk now was recreated by
     # someone, or was never really gone; committing its removal either way
     # destroys work no one asked to lose.
-    [ -e "$p" ] && { skipped+=("$p — deleted here but present in the tree"); continue; }
+    { [ -e "$p" ] || [ -L "$p" ]; } && { skipped+=("$p — deleted here but present in the tree"); continue; }
+    head_mode="$(git ls-tree "$base" -- "$p" | awk '{print $1}')"
+    { [ "$(_ledger_head_blob "$p")" = "$origin" ] && [ "$head_mode" = "$origin_mode" ]; } || { skipped+=("$p — changed in HEAD since deletion was recorded"); continue; }
     git update-index --force-remove -- "$p" && landing+=("$p"); continue
   fi
   head_blob="$(git rev-parse -q --verify "$base:$p" 2>/dev/null)" || head_blob="-"
@@ -71,7 +71,7 @@ while IFS= read -r p; do
   fi
   [ "$merged" = "$head_blob" ] && { skipped+=("$p — already in HEAD"); continue; }
   mode="$(git ls-tree "$base" -- "$p" 2>/dev/null | awk '{print $1}')"
-  [ -n "$mode" ] || { mode=100644; [ -x "$p" ] && mode=100755; }
+  [ -n "$mode" ] || mode="${origin_mode:-100644}"
   git update-index --add --cacheinfo "$mode,$merged,$p" && landing+=("$p")
 done <<< "$paths"
 
@@ -96,6 +96,5 @@ if ! git update-ref -m "commit: $(printf '%s' "$MSG" | head -1)" HEAD "$sha" "$b
 fi
 
 ledger_drop "${landing[@]}"
-git reset -q -- "${landing[@]}" 2>/dev/null || true
 echo "committed $(git rev-parse --short HEAD)  $(printf '%s' "$MSG" | head -1)"
 report

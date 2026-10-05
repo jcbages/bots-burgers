@@ -32,6 +32,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 command -v jq >/dev/null || { echo "error: jq is required (brew install jq)" >&2; exit 1; }
+command -v python3 >/dev/null || { echo "error: python3 is required" >&2; exit 1; }
 
 ALL_COMPONENTS="instructions commands skills agents settings codex"
 
@@ -143,93 +144,56 @@ link_into_dir() {
   done
 }
 
-# Merge statusLine + permissions.defaultMode + our hooks into the existing
-# settings.json, PRESERVING every other key (model, theme, autoMode, ...). Creates a
-# minimal file if none exists. settings.json is account-specific, so it is never
-# symlinked or overwritten wholesale. The hook scripts live in this repo and are
-# referenced by absolute path (like the statusline), so they are not symlinked.
-# Requires jq. Note: defaultMode "auto" only takes effect in ~/.claude/settings.json;
-# Claude Code ignores it in project/local settings.
-#
-# Hooks wired globally:
-#   Stop         -> hooks/require_dod.sh                (report skipped Definition-of-Done steps)
-#                -> shell/config_status.sh              (report uncommitted config changes)
-#   SessionStart -> hooks/session_start_persona_pick.sh (pick a persona for the session)
-#                -> hooks/session_start_domain_map.sh   (point at PROJECT_DOMAIN.md, or ask to bootstrap it)
-#   PreToolUse   -> hooks/require_persona.sh            (deny source edits until a persona is invoked;
-#                                                        on Edit|Write|MultiEdit and on Bash)
-#                -> hooks/block_branch_creation.sh      (Bash: deny git branch creation — stay on main)
-#                -> hooks/require_scoped_commit.sh      (Bash: note a commit that sweeps the shared index)
-#                -> hooks/block_discard_changes.sh      (Bash: deny discarding another agent's uncommitted work)
-#                -> hooks/session_ledger.sh pre          (record this session's changes, before/after each
-#   PostToolUse  -> hooks/session_ledger.sh post          tool call, so it can commit exactly its own work)
-#                -> hooks/block_kamal_mutations.sh      (Bash: deny Kamal prod-mutating commands)
-#                -> hooks/require_domain_map.sh         (deny a source-tree sweep until /project-domain runs;
-#                                                        on Grep|Glob and on Bash)
-#   PostToolUse  -> hooks/ast_grep_scan.sh              (Edit|Write: structural lint of the written file)
-merge_settings() {
-  local dest="$1/settings.json"
-  local base="{}"
-  [ -f "$dest" ] && [ ! -L "$dest" ] && base="$(cat "$dest")"
-  printf '%s' "$base" | jq \
-    --arg sl "$REPO_DIR/shell/statusline.sh" \
-    --arg status "$REPO_DIR/shell/config_status.sh" \
-    --arg dod "$REPO_DIR/hooks/require_dod.sh" \
-    --arg pick "$REPO_DIR/hooks/session_start_persona_pick.sh" \
-    --arg domain "$REPO_DIR/hooks/session_start_domain_map.sh" \
-    --arg persona "$REPO_DIR/hooks/require_persona.sh" \
-    --arg no_branch "$REPO_DIR/hooks/block_branch_creation.sh" \
-    --arg scoped_commit "$REPO_DIR/hooks/require_scoped_commit.sh" \
-    --arg no_discard "$REPO_DIR/hooks/block_discard_changes.sh" \
-    --arg no_kamal "$REPO_DIR/hooks/block_kamal_mutations.sh" \
-    --arg domain_gate "$REPO_DIR/hooks/require_domain_map.sh" \
-    --arg astgrep "$REPO_DIR/hooks/ast_grep_scan.sh" \
-    --arg ledger "$REPO_DIR/hooks/session_ledger.sh" \
-    '.statusLine = {type: "command", command: $sl}
-     | .permissions.defaultMode = "auto"
-     | .hooks.Stop = [ { hooks: [ { type: "command", command: $dod, statusMessage: "Checking Definition of Done..." }, { type: "command", command: $status } ] } ]
-     | .hooks.SessionStart = [ { hooks: [ { type: "command", command: $pick, statusMessage: "Picking persona for this session..." }, { type: "command", command: $domain, statusMessage: "Locating the domain map..." } ] } ]
-     | .hooks.PreToolUse = [
-         { matcher: "Edit|Write|MultiEdit", hooks: [ { type: "command", command: $persona, statusMessage: "Checking persona..." } ] },
-         { matcher: "Bash", hooks: [ { type: "command", command: $persona }, { type: "command", command: $no_branch }, { type: "command", command: $scoped_commit }, { type: "command", command: $no_discard }, { type: "command", command: $no_kamal }, { type: "command", command: $domain_gate } ] },
-         { matcher: "Grep|Glob", hooks: [ { type: "command", command: $domain_gate, statusMessage: "Checking the domain map..." } ] },
-         { matcher: "Bash|Edit|Write|NotebookEdit", hooks: [ { type: "command", command: ($ledger + " pre") } ] }
-       ]
-     | .hooks.PostToolUse = [
-         { matcher: "Edit|Write", hooks: [ { type: "command", command: $astgrep, statusMessage: "Running ast-grep scan..." } ] },
-         { matcher: "Bash|Edit|Write|NotebookEdit", hooks: [ { type: "command", command: ($ledger + " post") } ] }
-       ]' \
-    > "$dest.tmp" && mv "$dest.tmp" "$dest"
-  echo "  merge   $dest (statusLine + Stop/SessionStart/PreToolUse/PostToolUse hooks; existing keys preserved)"
-}
+shell_quote() { jq -rn --arg value "$1" '$value | @sh'; }
 
-merge_codex_hooks() {
-  local dest="$1/hooks.json" base="{}" tmp
-  if [ -L "$dest" ]; then
-    echo "error: refusing to replace symlinked Codex hooks file: $dest" >&2
-    return 1
-  fi
-  if [ -e "$dest" ] && [ ! -f "$dest" ]; then
-    echo "error: Codex hooks path is not a regular file: $dest" >&2
+merge_hooks() {
+  local dest="$1" host="$2" base="{}" tmp owned commands path suffix
+  if [ -L "$dest" ] || { [ -e "$dest" ] && [ ! -f "$dest" ]; }; then
+    echo "error: refusing non-regular or symlinked config: $dest" >&2
     return 1
   fi
   [ -f "$dest" ] && base="$(cat "$dest")"
-  tmp="$(mktemp "$1/.hooks.json.XXXXXX")" || { echo "error: could not create temporary Codex hooks file in $1" >&2; return 1; }
-  printf '%s' "$base" | jq \
-    --arg ledger "$REPO_DIR/hooks/session_ledger.sh" \
-    'def without_command($command):
-       map(.hooks = [.hooks[]? | select(.command != $command)] | select(.hooks | length > 0));
-     .hooks = (.hooks // {})
-     | .hooks.PreToolUse = ((.hooks.PreToolUse // [] | without_command("\"\($ledger)\" pre")) + [
-         { matcher: "Bash|apply_patch", hooks: [{ type: "command", command: "\"\($ledger)\" pre" }] }
-       ])
-     | .hooks.PostToolUse = ((.hooks.PostToolUse // [] | without_command("\"\($ledger)\" post")) + [
-         { matcher: "Bash|apply_patch", hooks: [{ type: "command", command: "\"\($ledger)\" post" }] }
-       ])' \
-    > "$tmp" || { rm -f "$tmp"; echo "error: could not merge Codex hooks into $dest" >&2; return 1; }
-  mv "$tmp" "$dest" || { rm -f "$tmp"; echo "error: could not write Codex hooks to $dest" >&2; return 1; }
-  echo "  merge   $dest (PreToolUse/PostToolUse session ledger hooks; existing hooks preserved)"
+  owned="$(for path in hooks/require_dod.sh shell/config_status.sh hooks/session_start_persona_pick.sh hooks/session_start_domain_map.sh hooks/require_persona.sh hooks/block_branch_creation.sh hooks/require_scoped_commit.sh hooks/block_discard_changes.sh hooks/block_kamal_mutations.sh hooks/require_domain_map.sh hooks/ast_grep_scan.sh hooks/session_ledger.sh; do
+    path="$REPO_DIR/$path"
+    for suffix in "" " pre" " codex-pre" " codex-start" " codex-context" " post"; do
+      printf '%s\n' "$path$suffix" "\"$path\"$suffix" "$(shell_quote "$path")$suffix"
+    done
+  done | jq -Rsc 'split("\n") | map(select(length > 0))')"
+  if [ "$host" = claude ]; then
+    commands="$(jq -n \
+      --arg domain "$(shell_quote "$REPO_DIR/hooks/session_start_domain_map.sh")" \
+      --arg branch "$(shell_quote "$REPO_DIR/hooks/block_branch_creation.sh")" \
+      --arg scoped "$(shell_quote "$REPO_DIR/hooks/require_scoped_commit.sh")" \
+      --arg discard "$(shell_quote "$REPO_DIR/hooks/block_discard_changes.sh")" \
+      --arg kamal "$(shell_quote "$REPO_DIR/hooks/block_kamal_mutations.sh")" \
+      --arg lint "$(shell_quote "$REPO_DIR/hooks/ast_grep_scan.sh")" \
+      --arg ledger "$(shell_quote "$REPO_DIR/hooks/session_ledger.sh")" \
+      '{SessionStart:[{hooks:[{type:"command",command:$domain}]}],
+        PreToolUse:[{matcher:"Bash",hooks:([$branch,$scoped,$discard,$kamal] | map({type:"command",command:.}))},
+          {matcher:"Bash|Edit|Write|NotebookEdit",hooks:[{type:"command",command:($ledger + " pre")}]}],
+        PostToolUse:[{matcher:"Edit|Write",hooks:[{type:"command",command:$lint}]},
+          {matcher:"Bash|Edit|Write|NotebookEdit",hooks:[{type:"command",command:($ledger + " post")}]}]}')"
+  else
+    commands="$(jq -n --arg ledger "$(shell_quote "$REPO_DIR/hooks/session_ledger.sh")" \
+      '{UserPromptSubmit:[{hooks:[{type:"command",command:($ledger + " codex-context")}]}],
+        PreToolUse:[{matcher:"apply_patch",hooks:[{type:"command",command:($ledger + " codex-pre")}]}],
+        PostToolUse:[{matcher:"apply_patch",hooks:[{type:"command",command:($ledger + " post")}]}]}')"
+  fi
+  tmp="$(mktemp "$(dirname "$dest")/.ai-config.XXXXXX")" || return 1
+  printf '%s' "$base" | jq --argjson owned "$owned" --argjson additions "$commands" \
+    --arg host "$host" --arg status "$(shell_quote "$REPO_DIR/shell/statusline.sh")" '
+    (if $host == "claude" then .statusLine //= {type:"command",command:$status} else . end)
+    | .hooks = ((.hooks // {}) | with_entries(.value |= map(
+      .hooks |= map(select(.command as $command | $owned | index($command) | not))
+      | select(.hooks | length > 0))) | with_entries(select(.value | length > 0)))
+    | reduce ($additions | keys[]) as $event (.; .hooks[$event] = ((.hooks[$event] // []) + $additions[$event]))
+  ' > "$tmp" || { rm -f "$tmp"; echo "error: invalid hook config: $dest" >&2; return 1; }
+  mv "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+  echo "  merge   $dest (owned hooks updated; unrelated settings preserved)"
 }
+
+merge_settings() { merge_hooks "$1/settings.json" claude; }
+merge_codex_hooks() { merge_hooks "$1/hooks.json" codex; }
 
 echo "Repo:        $REPO_DIR"
 if [ "$DO_CLAUDE" = 1 ] && [ "$NEED_CLAUDE" = 1 ]; then echo "Claude dir:  $CLAUDE_DIR"; else echo "Claude:      skipped"; fi
@@ -241,8 +205,8 @@ if [ "$DO_CLAUDE" = 1 ] && [ "$NEED_CLAUDE" = 1 ]; then
   echo "==> Claude Code"
   mkdir -p "$CLAUDE_DIR"
   if want instructions; then
-    link "$REPO_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"   # one-liner: @AGENTS.md
-    link "$REPO_DIR/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"   # canonical instructions
+    link "$REPO_DIR/instructions/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"   # one-liner: @AGENTS.md
+    link "$REPO_DIR/instructions/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"   # canonical instructions
   fi
   want commands && link_into_dir "$REPO_DIR/commands" "$CLAUDE_DIR/commands"
   want skills   && link_into_dir "$REPO_DIR/skills"   "$CLAUDE_DIR/skills"
@@ -255,7 +219,7 @@ if [ "$NEED_CODEX" = 1 ]; then
   echo "==> Codex"
   mkdir -p "$CODEX_DIR"
   if want instructions || want codex; then
-    link "$REPO_DIR/AGENTS.md" "$CODEX_DIR/AGENTS.md"
+    link "$REPO_DIR/instructions/AGENTS.md" "$CODEX_DIR/AGENTS.md"
   fi
   want skills && link_into_dir "$REPO_DIR/skills" "$CODEX_DIR/skills"
   echo "  note    Codex config.toml left untouched"

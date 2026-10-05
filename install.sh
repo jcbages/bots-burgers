@@ -112,7 +112,10 @@ link() {
   local src="$1" dest="$2"
   mkdir -p "$(dirname "$dest")"
   if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$src" ]; then return 0; fi
-  if [ -L "$dest" ] || [ -e "$dest" ]; then
+  if [ -L "$dest" ] && [ ! -e "$dest" ]; then
+    rm "$dest"   # a dangling link (e.g. from a moved checkout) has nothing to back up
+    echo "  unlink  $dest (was a dangling symlink)"
+  elif [ -L "$dest" ] || [ -e "$dest" ]; then
     local bak="${dest}.bak.$(stamp)"
     mv "$dest" "$bak"
     echo "  backup  $dest -> $bak"
@@ -146,19 +149,32 @@ link_into_dir() {
 
 shell_quote() { jq -rn --arg value "$1" '$value | @sh'; }
 
+# jq: the script path of a hook command written by this installer (any quoting).
+HOOK_SCRIPT_JQ='def script: sub(" (pre|post|codex-pre|codex-start|codex-context)$"; "")
+  | if startswith("\u0027") then .[1:-1] | gsub("\u0027\\\\\u0027\u0027"; "\u0027")
+    elif startswith("\"") then .[1:-1] else . end;'
+
 merge_hooks() {
-  local dest="$1" host="$2" base="{}" tmp owned commands path suffix
+  local dest="$1" host="$2" base="{}" tmp owned owned_paths dead commands path suffix script
   if [ -L "$dest" ] || { [ -e "$dest" ] && [ ! -f "$dest" ]; }; then
     echo "error: refusing non-regular or symlinked config: $dest" >&2
     return 1
   fi
   [ -f "$dest" ] && base="$(cat "$dest")"
-  owned="$(for path in hooks/require_dod.sh shell/config_status.sh hooks/session_start_persona_pick.sh hooks/session_start_domain_map.sh hooks/require_persona.sh hooks/block_branch_creation.sh hooks/require_scoped_commit.sh hooks/block_discard_changes.sh hooks/block_kamal_mutations.sh hooks/require_domain_map.sh hooks/ast_grep_scan.sh hooks/session_ledger.sh; do
+  printf '%s' "$base" | jq empty 2>/dev/null || { echo "error: invalid hook config: $dest" >&2; return 1; }
+  owned_paths="hooks/require_dod.sh shell/config_status.sh hooks/session_start_persona_pick.sh hooks/session_start_domain_map.sh hooks/require_persona.sh hooks/block_branch_creation.sh hooks/require_scoped_commit.sh hooks/block_discard_changes.sh hooks/block_kamal_mutations.sh hooks/require_domain_map.sh hooks/ast_grep_scan.sh hooks/session_ledger.sh"
+  owned="$(for path in $owned_paths; do
     path="$REPO_DIR/$path"
     for suffix in "" " pre" " codex-pre" " codex-start" " codex-context" " post"; do
       printf '%s\n' "$path$suffix" "\"$path\"$suffix" "$(shell_quote "$path")$suffix"
     done
   done | jq -Rsc 'split("\n") | map(select(length > 0))')"
+  # Scripts referenced by the config that no longer exist, e.g. after the checkout
+  # moved. Owned hooks and statuslines pointing at them are replaced below.
+  dead="$(printf '%s' "$base" | jq -r "$HOOK_SCRIPT_JQ"'[.hooks[]?[]?.hooks[]?.command, .statusLine.command?]
+      | .[] | strings | script' | while IFS= read -r script; do
+      [ -e "$script" ] || printf '%s\n' "$script"
+    done | jq -Rsc 'split("\n") | map(select(length > 0))')"
   if [ "$host" = claude ]; then
     commands="$(jq -n \
       --arg domain "$(shell_quote "$REPO_DIR/hooks/session_start_domain_map.sh")" \
@@ -179,12 +195,16 @@ merge_hooks() {
         PreToolUse:[{matcher:"apply_patch",hooks:[{type:"command",command:($ledger + " codex-pre")}]}],
         PostToolUse:[{matcher:"apply_patch",hooks:[{type:"command",command:($ledger + " post")}]}]}')"
   fi
-  tmp="$(mktemp "$(dirname "$dest")/.ai-config.XXXXXX")" || return 1
+  tmp="$(mktemp "$(dirname "$dest")/.bots-burgers.XXXXXX")" || return 1
   printf '%s' "$base" | jq --argjson owned "$owned" --argjson additions "$commands" \
-    --arg host "$host" --arg status "$(shell_quote "$REPO_DIR/shell/statusline.sh")" '
+    --arg host "$host" --arg status "$(shell_quote "$REPO_DIR/shell/statusline.sh")" \
+    --argjson dead "$dead" --arg rels "$owned_paths" "$HOOK_SCRIPT_JQ"'
+    ($rels | split(" ") | map("/" + .)) as $rels
+    | def moved($rel): script as $script | ($dead | index([$script])) and ($script | endswith($rel));
     (if $host == "claude" then .statusLine //= {type:"command",command:$status} else . end)
+    | (if $host == "claude" and ((.statusLine.command // "") | moved("/shell/statusline.sh")) then .statusLine.command = $status else . end)
     | .hooks = ((.hooks // {}) | with_entries(.value |= map(
-      .hooks |= map(select(.command as $command | $owned | index($command) | not))
+      .hooks |= map(select(.command as $command | ($owned | index([$command])) or ($command | any($rels[]; . as $rel | $command | moved($rel))) | not))
       | select(.hooks | length > 0))) | with_entries(select(.value | length > 0)))
     | reduce ($additions | keys[]) as $event (.; .hooks[$event] = ((.hooks[$event] // []) + $additions[$event]))
   ' > "$tmp" || { rm -f "$tmp"; echo "error: invalid hook config: $dest" >&2; return 1; }
@@ -192,9 +212,23 @@ merge_hooks() {
   echo "  merge   $dest (owned hooks updated; unrelated settings preserved)"
 }
 
+banner() {
+  cat <<'BANNER'
+        _.-----------._
+      .' .   .   .   . '.        B O T ' S   B U R G E R S
+     /___________________\       agents, skills & hooks
+     ~~~~~~~~~~~~~~~~~~~~~~      grand re-re-re-opening!
+     [  [o]   ___   [o]  ]
+     ~~~~~~~~~~~~~~~~~~~~~~
+     \___________________/
+
+BANNER
+}
+
 merge_settings() { merge_hooks "$1/settings.json" claude; }
 merge_codex_hooks() { merge_hooks "$1/hooks.json" codex; }
 
+banner
 echo "Repo:        $REPO_DIR"
 if [ "$DO_CLAUDE" = 1 ] && [ "$NEED_CLAUDE" = 1 ]; then echo "Claude dir:  $CLAUDE_DIR"; else echo "Claude:      skipped"; fi
 if [ "$NEED_CODEX" = 1 ]; then echo "Codex dir:   $CODEX_DIR"; else echo "Codex:       skipped"; fi

@@ -1,4 +1,4 @@
-# ai-config domain map
+# bots-burgers domain map
 
 Portable Claude Code and Codex instructions, skills, and hooks. Bash 3.2-compatible
 shell, Git, jq, and Python 3; no build step.

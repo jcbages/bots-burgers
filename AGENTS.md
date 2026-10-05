@@ -1,4 +1,4 @@
-# ai-config
+# bots-burgers
 
 This repository installs shared instructions and skills for Claude Code and Codex.
 Global preferences live in `instructions/AGENTS.md`; the installer links that file

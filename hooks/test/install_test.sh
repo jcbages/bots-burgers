@@ -34,6 +34,30 @@ cp "$W/claude-settings/settings.json" "$W/claude-first.json"
 "$ROOT/install.sh" -y --only settings --no-codex -c "$W/claude-settings" >/dev/null
 check "0" "$(cmp -s "$W/claude-first.json" "$W/claude-settings/settings.json"; echo $?)" "Claude settings merge is idempotent"
 
+old_repo="$W/old ' checkout"
+live_repo="$W/live-other"
+mkdir -p "$W/moved-settings" "$live_repo/hooks"
+: > "$live_repo/hooks/session_ledger.sh"
+jq -n --arg stale "$(jq -rn --arg p "$old_repo/hooks/session_ledger.sh" '$p | @sh') pre" \
+  --arg stale_guard "\"$old_repo/hooks/block_branch_creation.sh\"" \
+  --arg live "'$live_repo/hooks/session_ledger.sh' pre" \
+  --arg status "$(jq -rn --arg p "$old_repo/shell/statusline.sh" '$p | @sh')" \
+  '{statusLine:{type:"command",command:$status},hooks:{PreToolUse:[{matcher:"Bash",hooks:[{type:"command",command:$stale_guard},{type:"command",command:$live}]},{matcher:"Edit",hooks:[{type:"command",command:$stale}]}]}}' > "$W/moved-settings/settings.json"
+"$ROOT/install.sh" -y --only settings --no-codex -c "$W/moved-settings" >/dev/null
+check "0" "$(jq '[.hooks[][] | .hooks[] | select(.command | contains("old "))] | length' "$W/moved-settings/settings.json")" "hooks from a moved checkout are replaced"
+check "1" "$(jq --arg live "$live_repo" '[.hooks[][] | .hooks[] | select(.command | contains($live))] | length' "$W/moved-settings/settings.json")" "same-named hooks with a live script are preserved"
+check "1" "$(jq '[.hooks.PreToolUse[] | .hooks[] | select(.command | endswith("block_branch_creation.sh'"'"'"))] | length' "$W/moved-settings/settings.json")" "moved checkout hooks are not duplicated"
+check "'$ROOT/shell/statusline.sh'" "$(jq -r '.statusLine.command' "$W/moved-settings/settings.json")" "a statusline from a moved checkout is repointed"
+
+mkdir -p "$W/claude-dangling/skills"
+ln -s "$W/gone/skills/project-domain" "$W/claude-dangling/skills/project-domain"
+"$ROOT/install.sh" -y --only skills --no-codex -c "$W/claude-dangling" >/dev/null
+shopt -s nullglob
+backups=("$W/claude-dangling/skills/project-domain".bak.*)
+shopt -u nullglob
+check "0" "${#backups[@]}" "dangling links are replaced without a backup"
+check "$ROOT/skills/project-domain" "$(readlink "$W/claude-dangling/skills/project-domain")" "dangling links are repointed"
+
 mkdir -p "$W/codex-settings"
 cat > "$W/codex-settings/hooks.json" <<'JSON'
 {

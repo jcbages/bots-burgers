@@ -1,4 +1,4 @@
-# ai-config
+# bots-burgers
 
 Shared instructions and skills for Claude Code and Codex, with a portable installer
 and local hooks for protecting shared work.
@@ -19,7 +19,10 @@ Requires Bash, Git, `jq`, and Python 3. Run from a checkout you intend to keep:
 comma-separated list of `instructions,commands,skills,agents,settings,codex`.
 Re-running installation is idempotent. Different existing link destinations are
 backed up before replacement. Unrelated hooks, settings, and permission choices
-are preserved; only this repository's hook registrations are replaced.
+are preserved; only this repository's hook registrations are replaced. After moving
+or renaming the checkout, re-run the installer from the new location: hooks and the
+statusline whose scripts no longer exist are repointed, and dangling links are
+replaced without a backup.
 
 Start a new session after installing. Codex requires trust for new or changed hook
 definitions: inspect `/hooks` and trust the entries from this checkout. The installer

@@ -42,7 +42,7 @@ class LedgerTest(unittest.TestCase):
         self.hook('post', payload)
 
     def command(self, command, sid='A', *args):
-        return self.run_command(str(ROOT / 'bin' / command), *args, env=dict(os.environ, LEDGER_SESSION=sid))
+        return self.run_command(str(ROOT / 'skills' / 'gene' / 'scripts' / command), *args, env=dict(os.environ, LEDGER_SESSION=sid))
 
     def test_read_never_owns_concurrent_writer(self):
         payload = self.payload('reader', 'Bash', command='cat shared')

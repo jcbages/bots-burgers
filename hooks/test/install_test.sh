@@ -58,6 +58,17 @@ shopt -u nullglob
 check "0" "${#backups[@]}" "dangling links are replaced without a backup"
 check "$ROOT/skills/project-domain" "$(readlink "$W/claude-dangling/skills/project-domain")" "dangling links are repointed"
 
+check "Edit|Write Edit|Write" "$(jq -r --arg ledger "$ROOT/hooks/session_ledger.sh" '[.hooks.PreToolUse[], .hooks.PostToolUse[] | select(any(.hooks[]; .command | contains($ledger))) | .matcher] | join(" ")' "$W/moved-settings/settings.json")" "Claude ledger hooks skip Bash calls"
+
+fake_repo="$W/fake-repo"
+mkdir -p "$fake_repo/skills/kept" "$W/claude-prune/skills"
+cp "$ROOT/install.sh" "$fake_repo/install.sh"
+ln -s "$fake_repo/skills/retired" "$W/claude-prune/skills/retired"
+ln -s "$W/elsewhere/custom" "$W/claude-prune/skills/custom"
+"$fake_repo/install.sh" -y --only skills --no-codex -c "$W/claude-prune" >/dev/null
+check "0" "$([ -L "$W/claude-prune/skills/retired" ] && echo 1 || echo 0)" "links to skills removed from the repo are pruned"
+check "1" "$([ -L "$W/claude-prune/skills/custom" ] && echo 1 || echo 0)" "dangling links owned by something else are kept"
+
 mkdir -p "$W/codex-settings"
 cat > "$W/codex-settings/hooks.json" <<'JSON'
 {

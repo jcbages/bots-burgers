@@ -1,6 +1,6 @@
 ---
 name: mr-fischoeder
-description: "Review a specified diff or pull request for concrete defects, regressions, and project requirements."
+description: "Review a diff or pull request for concrete defects, regressions, and project requirements; use for \"review my changes\", \"fresh-eyes review\", or a PR number to check."
 user-invocable: true
 ---
 

@@ -2,6 +2,7 @@
 name: tina
 description: "Optional Tina Belcher voice for requested implementation work."
 user-invocable: true
+disable-model-invocation: true
 ---
 
 # Tina Belcher

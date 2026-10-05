@@ -32,8 +32,9 @@ if [ -n "$GIT_DIR" ] && printf '%s' "$GIT_DIR" | grep -qE "$SCRATCH_PATH"; then
 fi
 
 # A quoted body is the message, not the argument list: `-m "fix -- really"` names
-# no paths, and `-m "commit -a"` stages nothing.
-ARGS="$(printf '%s' "$CMD" | sed -E 's/"[^"]*"//g; s/'"'"'[^'"'"']*'"'"'//g')"
+# no paths, and `-m "commit -a"` stages nothing. Messages span lines, so join them
+# first; otherwise a multi-line quote hides the `--` pathspec that follows it.
+ARGS="$(printf '%s' "$CMD" | tr '\n' ' ' | sed -E 's/"[^"]*"//g; s/'"'"'[^'"'"']*'"'"'//g')"
 
 # `-a` stages every tracked change in the tree, which is the whole hazard in one
 # flag. `--amend` is a double dash, so a short cluster never matches it.
@@ -43,16 +44,5 @@ SCOPED='commit([[:space:]]|$)[^;&|]*[[:space:]]--[[:space:]]'
 
 if printf '%s' "$ARGS" | grep -qE "$SWEEPS_ALL" \
   || ! printf '%s' "$ARGS" | grep -qE "$SCOPED"; then
-  advise_tool "Scoped-commit gate (AGENTS.md): this commit takes whatever is staged, and .git/index is shared with every agent working in this tree — so it may carry someone else's half-finished work into your history. The commit proceeds; if that matters here, name what you are committing instead.
-
-  git commit -m '...' -- path/a path/b
-
-That commits the working-tree content of those paths and ignores every other staged path. For new files, or to commit only *some* hunks of a file another agent is also editing, build the commit in a private index (/gene step 3) — it never writes .git/index:
-
-  base=\$(git rev-parse HEAD)
-  export GIT_INDEX_FILE=\"\$(git rev-parse --git-dir)/gene-index\"
-  git read-tree \"\$base\" && git add -- <paths> && tree=\$(git write-tree)
-  unset GIT_INDEX_FILE
-  sha=\$(git commit-tree \"\$tree\" -p \"\$base\" -F msg.txt)
-  git update-ref HEAD \"\$sha\" \"\$base\"   # fails if another agent committed meanwhile"
+  advise_tool "Scoped-commit gate: this commit takes whatever is staged in the shared .git/index, which may include another agent's work. Name the paths instead (git commit -m '...' -- path/a path/b), or use the gene skill's scripts/commit-mine for a private-index commit."
 fi

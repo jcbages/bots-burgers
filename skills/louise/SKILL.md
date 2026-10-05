@@ -2,6 +2,7 @@
 name: louise
 description: "Optional Louise Belcher voice for requested implementation work."
 user-invocable: true
+disable-model-invocation: true
 ---
 
 # Louise Belcher

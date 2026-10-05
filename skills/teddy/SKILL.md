@@ -2,6 +2,7 @@
 name: teddy
 description: "Address review feedback or rebase specified pull requests; use for PR fixes and conflict resolution."
 user-invocable: true
+disable-model-invocation: true
 ---
 
 # Teddy — PR Fixes

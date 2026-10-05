@@ -145,6 +145,14 @@ link_into_dir() {
     [ -e "$entry" ] || continue   # nothing to link if the dir is empty
     link "$entry" "$dest_dir/$(basename "$entry")"
   done
+  # Entries removed from this repository leave dangling links behind.
+  for entry in "$dest_dir"/*; do
+    if [ -L "$entry" ] && [ ! -e "$entry" ]; then
+      case "$(readlink "$entry")" in
+        "$src_dir"/*) rm "$entry"; echo "  unlink  $entry (removed from repo)" ;;
+      esac
+    fi
+  done
 }
 
 shell_quote() { jq -rn --arg value "$1" '$value | @sh'; }
@@ -186,9 +194,9 @@ merge_hooks() {
       --arg ledger "$(shell_quote "$REPO_DIR/hooks/session_ledger.sh")" \
       '{SessionStart:[{hooks:[{type:"command",command:$domain}]}],
         PreToolUse:[{matcher:"Bash",hooks:([$branch,$scoped,$discard,$kamal] | map({type:"command",command:.}))},
-          {matcher:"Bash|Edit|Write|NotebookEdit",hooks:[{type:"command",command:($ledger + " pre")}]}],
+          {matcher:"Edit|Write",hooks:[{type:"command",command:($ledger + " pre")}]}],
         PostToolUse:[{matcher:"Edit|Write",hooks:[{type:"command",command:$lint}]},
-          {matcher:"Bash|Edit|Write|NotebookEdit",hooks:[{type:"command",command:($ledger + " post")}]}]}')"
+          {matcher:"Edit|Write",hooks:[{type:"command",command:($ledger + " post")}]}]}')"
   else
     commands="$(jq -n --arg ledger "$(shell_quote "$REPO_DIR/hooks/session_ledger.sh")" \
       '{UserPromptSubmit:[{hooks:[{type:"command",command:($ledger + " codex-context")}]}],

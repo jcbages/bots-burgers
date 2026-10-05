@@ -11,7 +11,8 @@
 #   mine --stat     diffstat
 #
 set -u
-DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# -P resolves through the installed skill link back to the repository root.
+DIR="$(cd -P "$(dirname "$0")/../../.." && pwd)"
 # shellcheck source=hooks/lib/ledger.sh
 . "$DIR/hooks/lib/ledger.sh"
 

@@ -233,7 +233,7 @@ def main():
                 context.touch()
                 print(json.dumps({'hookSpecificOutput': {
                     'hookEventName': 'UserPromptSubmit',
-                    'additionalContext': 'For ledger commands in ' + str(root) + ', prefix bin/mine and bin/commit-mine with LEDGER_SESSION=' + shlex.quote(sid) + '.'}}))
+                    'additionalContext': 'For ledger commands in ' + str(root) + ', prefix gene scripts/mine and scripts/commit-mine with LEDGER_SESSION=' + shlex.quote(sid) + '.'}}))
         return
     if mode != 'run' and payload.get('tool_name') not in ('Edit', 'Write', 'apply_patch'):
         return

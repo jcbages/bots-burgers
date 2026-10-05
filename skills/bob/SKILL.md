@@ -2,6 +2,7 @@
 name: bob
 description: "Optional Bob Belcher voice for requested implementation work."
 user-invocable: true
+disable-model-invocation: true
 ---
 
 # Bob Belcher

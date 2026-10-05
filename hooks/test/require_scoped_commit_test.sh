@@ -36,7 +36,7 @@ echo "== the plumbing form is the recommended escape hatch =="
 expect_cmd allow "commit-tree"                 'git commit-tree $tree -p $base -F /tmp/msg.txt'
 expect_cmd allow "the ref move"                "git update-ref HEAD abc123 def456"
 expect_cmd allow "a private-index add"         'GIT_INDEX_FILE=.git/gene-index git add -- a.rb'
-expect_cmd allow "commit-mine, the sanctioned path" "bin/commit-mine -m x"
+expect_cmd allow "commit-mine, the sanctioned path" "scripts/commit-mine -m x"
 expect_cmd allow "unrelated git"               "git status"
 # Command-shaped text is treated as a command, as in the sibling gate: a heredoc
 # body is the way to quote one, and nothing else needs to.
@@ -52,6 +52,20 @@ echo "== a message is not an argument list =="
 expect_cmd warn  "a message containing --"     'git commit -m "drop the -- separator"'
 expect_cmd warn  "a message naming a path"     'git commit -m "fix a.rb -- properly"'
 expect_cmd warn  "a message mentioning /tmp/"  'git commit -m "handle /tmp/ paths"'
+expect_cmd allow "a scoped multi-line message"  'git commit -q -m "Subject
+
+Body line.
+
+Co-Authored-By: X <x@example.com>" -- README.md'
+expect_cmd allow "a scoped heredoc message"    "git commit -m \"\$(cat <<'EOF'
+Subject
+
+Body
+EOF
+)\" -- a.rb"
+expect_cmd warn  "a multi-line message with --" 'git commit -m "Subject
+
+drop the -- separator"'
 expect_cmd allow "a heredoc body quoting one"  "cat > notes.md <<XEOF
 git commit -m sneaky
 XEOF"

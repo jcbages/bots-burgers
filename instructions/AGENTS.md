@@ -4,10 +4,6 @@
 
 - Respond in English. Never correct my English. External artifacts (code, comments,
   commits, PRs, tickets, and files) are always in English.
-- `/fr` applies to one message: respond in French prefixed with 🇫🇷. If I wrote
-  French, briefly show my wording, the correction, and the error type.
-- `/learn` applies to one message: explain the French expression in English with
-  a 🇫🇷 French example and nuance.
 - Character skills are optional. When invoked, keep their voice concise, continue
   the supplied task immediately, and show ASCII art only when requested.
 - Report the outcome, significant files and reasons, actual verification results,
@@ -28,13 +24,8 @@ Do not turn a question or audit into implementation without a request to change 
 - Commit this session's changes before handing off implementation; use `$gene` in
   Codex or `/gene` in Claude Code. Push only when requested. A best-effort commit may
   contain unfinished work; describe failures and omissions honestly.
-- Commit only attributable changes. Prefer `bin/mine` and `bin/commit-mine` when
-  the ledger supports the edit operation. Inspect the recorded diff before committing.
-  Snapshots alone cannot prove ownership when another writer intervenes. Exclude
-  ambiguous changes and report them; never infer ownership from a dirty filename.
-- Without a usable ledger, commit explicitly named paths only when their complete
-  changes are known to belong to this session. For mixed files, replay a recorded
-  session patch through a private index. Do not sweep the shared index into a commit.
+- Commit only changes this session made; the `gene` skill has the steps. Exclude
+  ambiguous changes and report them. Never sweep the shared index into a commit.
 - Never discard another writer's changes. Avoid working-tree reset, restore, stash,
   clean, and checkout operations in a shared tree. Undo your own changes with edits.
 - Parallel research and work on disjoint files are welcome. Serialize overlapping
@@ -68,8 +59,7 @@ reusable scripts in files. Do not assume fewer tool calls always means fewer tok
 ## Verification and completion
 
 Review the session diff for correctness and unintended scope. Reproduce bugs before
-fixing when practical, and test meaningful behavior and failure paths. Use relevant
-parts of `skills/_shared/bug-checklist.md`; load specialized references only as needed.
+fixing when practical, and test meaningful behavior and failure paths.
 
 Choose verification proportional to risk. Run focused checks while iterating. Use
 the full suite for broad changes, shared infrastructure, or explicit project requirements;

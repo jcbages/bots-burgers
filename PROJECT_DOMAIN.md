@@ -13,7 +13,8 @@ shell, Git, jq, and Python 3; no build step.
 <!-- pd:installation -->
 ## Installation and instructions
 
-- `install.sh` links shared resources and merges only owned hook registrations.
+- `install.sh` links shared resources and merges only owned hook registrations. On
+  rerun it repoints hooks whose scripts moved and unlinks entries deleted from the repo.
 - `instructions/AGENTS.md` supplies global preferences to both hosts;
   `instructions/CLAUDE.md` imports the neighboring AGENTS.md for Claude.
 - Root `AGENTS.md` and `CLAUDE.md` describe this repository only, avoiding a second
@@ -28,15 +29,15 @@ shell, Git, jq, and Python 3; no build step.
 `skills/<name>/SKILL.md` is the entrypoint in either host. References resolve relative
 to that directory, including `../_shared/`.
 
-- `bob`, `tina`, `louise`: optional implementation voices.
+- `bob`, `tina`, `louise`: optional implementation voices (user-invoked only).
 - `gene`: scoped local commit; push only on explicit request; truthful ticket state.
+  Bundles the ledger tools in `skills/gene/scripts/` so they work from any project.
 - `mr-frond`: package a recorded session delta into a PR.
 - `teddy`: address actionable PR feedback and conflicts, stopping for external reviews.
 - `mr-fischoeder`: scoped review with concrete failure evidence.
 - `project-domain`: consult or maintain a concise map when useful.
 - `rails-patterns`: conditional references for Basecamp-style Rails conventions.
 - `_shared/bug-checklist.md`: universal review questions; specialized rules stay scoped.
-- `agents/explore.md`: Claude read-only survey, returning conclusions and citations.
 
 <!-- pd:hooks -->
 ## Hooks and commits
@@ -46,15 +47,16 @@ to that directory, including `../_shared/`.
 - `hooks/require_scoped_commit.sh`: advisory note for shared-index commits.
 - `hooks/session_start_domain_map.sh`: optional map location hint, never bootstrap demand.
 - `hooks/ast_grep_scan.sh`: structural lint when a project has `sgconfig.yml`.
-- `hooks/require_persona.sh`, `require_domain_map.sh`, `require_dod.sh`,
-  `session_start_persona_pick.sh`, and `shell/config_status.sh`: retired compatibility
-  entrypoints; installation removes their registrations.
+- Retired hooks (`require_persona`, `require_domain_map`, `require_dod`,
+  `session_start_persona_pick`, `shell/config_status.sh`) are deleted; `install.sh`
+  still removes their registrations from older configs.
 - `hooks/session_ledger.sh`, `hooks/lib/ledger_capture.py`, `hooks/lib/ledger.sh`:
-  reconstruct explicit edits, verify outcomes, and lock per-session state. Shell
+  reconstruct explicit edits, verify outcomes, and lock per-session state. Claude runs
+  them only on Edit/Write. Shell
   mutations and unsupported patch forms are not automatically attributed. Codex
   UserPromptSubmit supplies the session ID as context for explicit ledger commands;
   PreToolUse does not change command permissions.
-- `bin/mine`: inspect the session record; `bin/commit-mine`: private-index replay and
+- `skills/gene/scripts/mine`: inspect the session record; `commit-mine`: private-index replay and
   compare-and-swap commit. Neither dirty filenames nor command-duration snapshots
   establish ownership. Unsupported or ambiguous edits must not be committed as verified.
 - `hooks/lib/bash_command.sh`: shared command/path parsing for action guards.

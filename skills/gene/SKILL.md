@@ -6,26 +6,18 @@ user-invocable: true
 
 # Gene — Session Commit
 
-A short Gene-style greeting is optional. Proceed with the pending task; print art only if requested.
+A short Gene-style greeting is optional; print art only if requested. Stay on `main` unless a branch or PR flow was authorized. Commit locally; push only when the user asked. Read [project settings](../_shared/project-config.md) only for settings not yet established, such as Linear.
 
-Read [project settings](../_shared/project-config.md) only for settings not already established. Stay on `main` unless the user explicitly authorized a branch or PR flow. Commit locally by default; push only when the user expressly requested it.
+The scripts below live in this skill's `scripts/` directory; run them by that full path from the project root. In Codex, prefix them with the `LEDGER_SESSION='<id>'` assignment from the prompt context; Claude Code supplies its session ID automatically.
 
-## Establish ownership
+## Steps
 
-Use recorded session edits and a known starting snapshot to identify the exact changes to commit. If available, inspect `bin/mine --files` and `bin/mine`, but treat the ledger as supporting evidence: before/after snapshots cannot prove who wrote a line while concurrent writers were active. Serialize writers when ownership matters. Do not reconstruct disputed ownership from the final diff or classify an entire mixed file as yours.
+1. **See what is yours.** `scripts/mine --files` lists the Edit/Write changes recorded for this session, and `scripts/mine` shows their diff. Compare it with what you know you changed. Shell edits (sed, heredocs, scripts) are not recorded.
+2. **Commit recorded edits.** `scripts/commit-mine --dry-run`, check the landing and skipped lists, then `scripts/commit-mine -m "<message>"`. It commits through a private index and never touches the shared one. If HEAD moved meanwhile, rerun it.
+3. **Commit everything else by path.** For files this session changed entirely, including shell edits and new files: `git commit -m "<message>" -- <paths>`. Never sweep the shared index (`git commit` without paths, `-a`, or `git add .`).
+4. **Leave out what you cannot attribute.** A file another session also edited, or a contested ledger entry, stays uncommitted and goes in the report. Never discard or rewrite someone else's changes.
+5. **Push only on request.** First list `git log origin/main..HEAD`: pushing `main` publishes every unpushed commit, not just this session's. Never force-push `main`.
 
-Codex's `UserPromptSubmit` context supplies the current session ID. Prefix every `bin/mine` and `bin/commit-mine` command with that exact `LEDGER_SESSION='<id>'` assignment. Claude Code supplies `CLAUDE_CODE_SESSION_ID` to its Bash subprocesses.
+Write one cohesive commit with an imperative message. A best-effort commit may include unfinished work if the message and report say so. Reuse the session's test and review results; rerun checks only when something changed since. If Linear is opted in, update an identified ticket and mark it Done only when its acceptance criteria are met.
 
-Leave contested edits out and report them. A path-scoped `git commit -- <paths>` is a fallback only when each included file's entire change is demonstrably this session's and shared-index access is serialized. For mixed files, use a private index with the independently verified session patch. If safe ownership cannot be established, report the uncommitted work rather than including another session's edits.
-
-Do not discard working-tree changes or rewrite files to remove someone else's lines. Keep the shared index untouched when using `bin/commit-mine`: it builds a private index and moves the ref with compare-and-swap. The shared index can lag behind the new `HEAD`, so `git status` may show staged changes after a commit; refresh only paths you own, and never reset paths with another session's staged work.
-
-## Commit and report
-
-1. Reuse the session's validation and review evidence. Run additional checks only when changes, failures, or unresolved risks warrant them; do not repeat completed gates at handoff.
-2. If using `bin/commit-mine`, inspect `--dry-run` against the independently verified session patch before committing. Skipped files and failures belong in the report. A ref race warrants refreshing HEAD and rechecking the patch, not a blind retry loop.
-3. Commit one cohesive change with an imperative message. Best-effort commits may contain unfinished work; name that work and any failing checks explicitly.
-4. If Linear is opted in and available, use an existing task when identified. Create a lightweight ticket only when that workflow is authorized; no persona filler. Mark it Done only after the commit succeeds and its acceptance criteria are complete. Otherwise preserve its state and report what remains.
-5. If pushing was requested, inspect the outgoing commits and remote first: pushing local `main` publishes every unpushed commit, not just this session's. Honor the authorized scope and never force-push shared `main`.
-
-Report the commit, files changed and why, unfinished or excluded work, and checks actually run. Include a ticket only when one was used, and distinguish local commit from successful push.
+Report the commit hash, files and why, excluded or unfinished work, checks run, and whether it was pushed.

@@ -1,7 +1,7 @@
 # bots-burgers
+:hamburger: A Bob's Burgers crew of skills, hooks, and shared instructions for Claude Code and Codex.
 
-Shared instructions and skills for Claude Code and Codex, with a portable installer
-and local hooks for protecting shared work.
+A portable installer links everything into each host, and local hooks protect shared work.
 
 ## Install
 

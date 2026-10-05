@@ -25,7 +25,7 @@ git config user.email t@t; git config user.name t
 seq 1 40 | sed 's/^/line/' > shared.rb
 git add . && git commit -qm base
 
-hook() { printf '{"session_id":"%s","cwd":"%s"}' "$2" "$W" | "$HOOK" "$1" >/dev/null 2>&1; }
+hook() { printf '{"session_id":"%s","cwd":"%s","tool_use_id":"%s-call"}' "$2" "$W" "$2" | "$HOOK" "$1" >/dev/null 2>&1; }
 edit() { perl -i -pe "s/^\Qline$2\E\$/line$2 $3/" "$1"; }
 mine() { LEDGER_SESSION="$1" "$ROOT/bin/mine" "${2:---files}" 2>/dev/null; }
 commit_mine() { local s="$1"; shift; LEDGER_SESSION="$s" "$ROOT/bin/commit-mine" "$@" 2>&1; }
@@ -101,7 +101,7 @@ echo "== a tool call made from a subdirectory =="
 # in the tree as deleted — by a session that never opened it.
 mkdir -p deep/er && printf 'x\n' > deep/er/nested.rb
 git add deep/er/nested.rb && git commit -qm nested
-hook_at() { printf '{"session_id":"%s","cwd":"%s"}' "$2" "$3" | "$HOOK" "$1" >/dev/null 2>&1; }
+hook_at() { printf '{"session_id":"%s","cwd":"%s","tool_use_id":"%s-call"}' "$2" "$3" "$2" | "$HOOK" "$1" >/dev/null 2>&1; }
 
 printf 'x\nC line\n' > untouched.rb; git add untouched.rb && git commit -qm untouched
 printf 'x\nC line\nedited by another session\n' > untouched.rb

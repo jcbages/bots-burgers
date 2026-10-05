@@ -1,6 +1,6 @@
 # ai-config Domain Map
 
-**Portable instructions and skills for Claude Code + Codex, plus Claude Code commands and hooks, installed by symlink from one source of truth.** Stack: Bash + `jq`, no build step; tests are plain shell suites under `hooks/test/`, run with `hooks/test/run_all.sh`.
+**Portable instructions and skills for Claude Code + Codex, plus tool-specific hooks and Claude Code commands, installed from one source of truth.** Stack: Bash + `jq`, no build step; tests are plain shell suites under `hooks/test/`, run with `hooks/test/run_all.sh`.
 
 **This file is the navigational index.** For full detail on any item, jump to its
 `<!-- pd:* -->` anchor via the index below.
@@ -37,7 +37,7 @@ skills/<name>/SKILL.md ──(symlink)─────── Claude ~/.claude/ski
     ├── no prod mutations     -> hooks/block_kamal_mutations.sh
     └── commit every session  -> nothing yet; instruction only
 
-install.sh wires all of the above into <config dir>/settings.json (merge, never overwrite)
+install.sh merges Claude hooks into settings.json and Codex hooks into hooks.json
 ```
 
 <!-- pd:entry_points -->
@@ -45,8 +45,8 @@ install.sh wires all of the above into <config dir>/settings.json (merge, never 
 
 - **`install.sh`** — the only executable a user runs directly. Symlinks instructions
   and skills into Claude Code and Codex, links Claude-only commands and agents, merges
-  the hook + statusline keys into `settings.json` via `jq` (`merge_settings()`), and
-  supports `--only <components>` and single-tool installs; re-running is idempotent.
+  hooks into Claude `settings.json` and Codex `hooks.json` via `jq`, and supports
+  `--only <components>` and single-tool installs; re-running is idempotent.
 - **`bin/mine`** — this session's diff / file list, from the ledger.
 - **`bin/commit-mine`** — commit exactly this session's changes.
 - **`hooks/test/run_all.sh`** — the whole test suite.
@@ -71,7 +71,8 @@ install.sh wires all of the above into <config dir>/settings.json (merge, never 
   message. `GENUINE_USER_TEXT` (`hooks/lib/bash_command.sh`) is the shared filter, but only
   `require_domain_map.sh` uses it: `require_dod.sh` carries its own inline copy and
   `require_persona.sh` greps the raw transcript.
-- **`settings.json` is never symlinked or overwritten** — `install.sh` merges only its own keys.
+- **Tool settings are never symlinked or overwritten** — `install.sh` merges only its
+  own hook entries into Claude `settings.json` and Codex `hooks.json`.
 - **A commit carries only its own session's work.** `.git/index` is shared by every agent
   in the tree, so attribution is recorded as it happens by the ledger, not reconstructed.
 - **Nothing discards a working tree it shares.** A linked worktree (git dir != common dir) and
@@ -87,7 +88,8 @@ blast radius, codebase navigation, round trips). `CLAUDE.md` imports it.
 <!-- pd:hooks -->
 ## Hooks
 
-Wired globally by `install.sh:merge_settings()`. The Bash-reading ones source
+Claude hooks are wired by `install.sh:merge_settings()`; Codex session ledger hooks
+are wired by `install.sh:merge_codex_hooks()`. The Bash-reading ones source
 `hooks/lib/bash_command.sh`; the two that advise rather than deny source `hooks/lib/advice.sh`.
 
 | Hook | Event | What it does |

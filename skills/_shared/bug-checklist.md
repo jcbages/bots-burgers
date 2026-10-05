@@ -36,6 +36,7 @@ This is the generic checklist shipped with the shared skills. If the project's `
 
 - SQL injection, XSS, mass assignment (are params/inputs allow-listed?), exposed secrets
 - **Exported CSV/TSV**: cells starting with `=`, `+`, `-`, `@` execute when opened in a spreadsheet. Escape them if any value came from outside, and set restrictive file permissions when the export holds user data.
+- **Temp-file redirects must not use predictable paths**: shell redirection follows a preexisting symlink before a later rename can replace it. Create a unique file with `mktemp` in the destination directory, write into it, then rename it atomically.
 - New endpoint without auth — is it covered by the unauthorized-access test sweeps?
 
 ## Data & concurrency

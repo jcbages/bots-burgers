@@ -23,7 +23,7 @@
 #       --no-codex         Do not touch Codex.
 #       --only LIST        Comma-separated components to install (default: all).
 #                          Valid: instructions, commands, skills, agents, settings, codex.
-#                          ('settings' wires the Claude statusline and hooks.)
+#                          ('settings' wires Claude settings and Codex ledger hooks.)
 #   -y, --yes              Assume defaults, do not prompt.
 #   -h, --help             Show this help.
 #
@@ -78,6 +78,13 @@ NEED_CLAUDE=0
 if [ "$DO_CLAUDE" = 1 ]; then
   for c in instructions commands skills agents settings; do
     want "$c" && NEED_CLAUDE=1
+  done
+fi
+
+NEED_CODEX=0
+if [ "$DO_CODEX" = 1 ]; then
+  for c in codex instructions skills settings; do
+    want "$c" && NEED_CODEX=1
   done
 fi
 
@@ -196,9 +203,37 @@ merge_settings() {
   echo "  merge   $dest (statusLine + Stop/SessionStart/PreToolUse/PostToolUse hooks; existing keys preserved)"
 }
 
+merge_codex_hooks() {
+  local dest="$1/hooks.json" base="{}" tmp
+  if [ -L "$dest" ]; then
+    echo "error: refusing to replace symlinked Codex hooks file: $dest" >&2
+    return 1
+  fi
+  if [ -e "$dest" ] && [ ! -f "$dest" ]; then
+    echo "error: Codex hooks path is not a regular file: $dest" >&2
+    return 1
+  fi
+  [ -f "$dest" ] && base="$(cat "$dest")"
+  tmp="$(mktemp "$1/.hooks.json.XXXXXX")" || { echo "error: could not create temporary Codex hooks file in $1" >&2; return 1; }
+  printf '%s' "$base" | jq \
+    --arg ledger "$REPO_DIR/hooks/session_ledger.sh" \
+    'def without_command($command):
+       map(.hooks = [.hooks[]? | select(.command != $command)] | select(.hooks | length > 0));
+     .hooks = (.hooks // {})
+     | .hooks.PreToolUse = ((.hooks.PreToolUse // [] | without_command("\"\($ledger)\" pre")) + [
+         { matcher: "Bash|apply_patch", hooks: [{ type: "command", command: "\"\($ledger)\" pre" }] }
+       ])
+     | .hooks.PostToolUse = ((.hooks.PostToolUse // [] | without_command("\"\($ledger)\" post")) + [
+         { matcher: "Bash|apply_patch", hooks: [{ type: "command", command: "\"\($ledger)\" post" }] }
+       ])' \
+    > "$tmp" || { rm -f "$tmp"; echo "error: could not merge Codex hooks into $dest" >&2; return 1; }
+  mv "$tmp" "$dest" || { rm -f "$tmp"; echo "error: could not write Codex hooks to $dest" >&2; return 1; }
+  echo "  merge   $dest (PreToolUse/PostToolUse session ledger hooks; existing hooks preserved)"
+}
+
 echo "Repo:        $REPO_DIR"
 if [ "$DO_CLAUDE" = 1 ] && [ "$NEED_CLAUDE" = 1 ]; then echo "Claude dir:  $CLAUDE_DIR"; else echo "Claude:      skipped"; fi
-if [ "$DO_CODEX" = 1 ] && { want codex || want instructions || want skills; }; then echo "Codex dir:   $CODEX_DIR"; else echo "Codex:       skipped"; fi
+if [ "$NEED_CODEX" = 1 ]; then echo "Codex dir:   $CODEX_DIR"; else echo "Codex:       skipped"; fi
 [ -n "$ONLY" ] && echo "Only:        $ONLY"
 echo
 
@@ -215,7 +250,7 @@ if [ "$DO_CLAUDE" = 1 ] && [ "$NEED_CLAUDE" = 1 ]; then
   want settings && merge_settings "$CLAUDE_DIR"
 fi
 
-if [ "$DO_CODEX" = 1 ] && { want codex || want instructions || want skills; }; then
+if [ "$NEED_CODEX" = 1 ]; then
   echo
   echo "==> Codex"
   mkdir -p "$CODEX_DIR"
@@ -223,7 +258,11 @@ if [ "$DO_CODEX" = 1 ] && { want codex || want instructions || want skills; }; t
     link "$REPO_DIR/AGENTS.md" "$CODEX_DIR/AGENTS.md"
   fi
   want skills && link_into_dir "$REPO_DIR/skills" "$CODEX_DIR/skills"
-  echo "  note    Codex config.toml left untouched; see codex/config.example.toml"
+  echo "  note    Codex config.toml left untouched"
+  if want settings; then
+    merge_codex_hooks "$CODEX_DIR" || exit 1
+    echo "  note    Session ledger hooks are merged into hooks.json"
+  fi
 fi
 
 echo

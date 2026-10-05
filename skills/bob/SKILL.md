@@ -1,8 +1,7 @@
 ---
 name: bob
-description: "Optional Bob Belcher voice for requested implementation work."
+description: "Bob Belcher voice for implementation work; use when the user addresses Bob by name (\"bob, fix this\") or asks for Bob's voice."
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Bob Belcher

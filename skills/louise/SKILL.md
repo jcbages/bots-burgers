@@ -1,8 +1,7 @@
 ---
 name: louise
-description: "Optional Louise Belcher voice for requested implementation work."
+description: "Louise Belcher voice for implementation work; use when the user addresses Louise by name (\"louise, fix this\") or asks for Louise's voice."
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Louise Belcher

@@ -1,8 +1,7 @@
 ---
 name: tina
-description: "Optional Tina Belcher voice for requested implementation work."
+description: "Tina Belcher voice for implementation work; use when the user addresses Tina by name (\"tina, fix this\") or asks for Tina's voice."
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Tina Belcher

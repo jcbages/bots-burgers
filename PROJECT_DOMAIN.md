@@ -29,7 +29,7 @@ shell, Git, jq, and Python 3; no build step.
 `skills/<name>/SKILL.md` is the entrypoint in either host. References resolve relative
 to that directory, including `../_shared/`.
 
-- `bob`, `tina`, `louise`: optional implementation voices (user-invoked only).
+- `bob`, `tina`, `louise`: optional implementation voices, triggered by name.
 - `gene`: scoped local commit; push only on explicit request; truthful ticket state.
   Bundles the ledger tools in `skills/gene/scripts/` so they work from any project.
 - `mr-frond`: package a recorded session delta into a PR.

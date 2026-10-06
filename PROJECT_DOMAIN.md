@@ -29,7 +29,8 @@ shell, Git, jq, and Python 3; no build step.
 `skills/<name>/SKILL.md` is the entrypoint in either host. References resolve relative
 to that directory, including `../_shared/`.
 
-- `bob`, `tina`, `louise`: optional implementation voices, triggered by name.
+- `bob`, `tina`, `louise`: rotating work personas with ASCII art, picked at session
+  start by `hooks/session_start_persona_pick.sh` or named by the user.
 - `gene`: scoped local commit; push only on explicit request; truthful ticket state.
   Bundles the ledger tools in `skills/gene/scripts/` so they work from any project.
 - `mr-frond`: package a recorded session delta into a PR.
@@ -45,10 +46,12 @@ to that directory, including `../_shared/`.
 - `hooks/block_branch_creation.sh`, `block_discard_changes.sh`, and
   `block_kamal_mutations.sh`: Claude action guards.
 - `hooks/require_scoped_commit.sh`: advisory note for shared-index commits.
+- `hooks/session_start_persona_pick.sh`: picks the session persona on startup/clear in
+  both hosts; resumed and compacted sessions keep theirs.
 - `hooks/session_start_domain_map.sh`: optional map location hint, never bootstrap demand.
 - `hooks/ast_grep_scan.sh`: structural lint when a project has `sgconfig.yml`.
 - Retired hooks (`require_persona`, `require_domain_map`, `require_dod`,
-  `session_start_persona_pick`, `shell/config_status.sh`) are deleted; `install.sh`
+  `shell/config_status.sh`) are deleted; `install.sh`
   still removes their registrations from older configs.
 - `hooks/session_ledger.sh`, `hooks/lib/ledger_capture.py`, `hooks/lib/ledger.sh`:
   reconstruct explicit edits, verify outcomes, and lock per-session state. Claude runs

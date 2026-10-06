@@ -22,7 +22,7 @@ changed hooks under `/hooks`.
 | `mr-frond` | Open a pull request |
 | `teddy` | Address review feedback, rebase PRs |
 | `linda` | Create Linear tickets |
-| `bob`, `tina`, `louise` | Optional character voices |
+| `bob`, `tina`, `louise` | Work personas, one picked per session |
 
 Use `/gene` in Claude Code and `$gene` in Codex. Hooks guard destructive Git
 operations and keep commits scoped to each session's own edits.

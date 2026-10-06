@@ -29,7 +29,8 @@ check "default" "$(jq -r '.permissions.defaultMode' "$W/claude-settings/settings
 check "custom-status" "$(jq -r '.statusLine.command' "$W/claude-settings/settings.json")" "Claude preserves custom statusline"
 check "custom-pre" "$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$W/claude-settings/settings.json")" "Claude preserves unrelated tool hooks"
 check "custom-stop" "$(jq -r '.hooks.Stop[0].hooks[0].command' "$W/claude-settings/settings.json")" "Claude preserves unrelated stop hooks"
-check "0" "$(jq '[.hooks[][] | .hooks[] | select(.command | test("require_persona|require_domain_map|require_dod|config_status|session_start_persona"))] | length' "$W/claude-settings/settings.json")" "Claude removes legacy ritual hooks"
+check "0" "$(jq '[.hooks[][] | .hooks[] | select(.command | test("require_persona|require_domain_map|require_dod|config_status"))] | length' "$W/claude-settings/settings.json")" "Claude removes legacy ritual hooks"
+check "1" "$(jq '[.hooks.SessionStart[] | .hooks[] | select(.command | contains("session_start_persona_pick.sh"))] | length' "$W/claude-settings/settings.json")" "Claude installs the persona pick hook"
 cp "$W/claude-settings/settings.json" "$W/claude-first.json"
 "$ROOT/install.sh" -y --only settings --no-codex -c "$W/claude-settings" >/dev/null
 check "0" "$(cmp -s "$W/claude-first.json" "$W/claude-settings/settings.json"; echo $?)" "Claude settings merge is idempotent"
@@ -102,6 +103,7 @@ check "1" "$([ -L "$W/codex-settings/hooks.json.tmp" ] && echo 1 || echo 0)" "Co
 check "1" "$(jq '[.hooks.PreToolUse[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" codex-pre"))] | length' "$W/codex-settings/hooks.json")" "rerunning settings install does not duplicate Codex pre-hooks"
 check "0" "$(jq '[.hooks.SessionStart[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" codex-start"))] | length' "$W/codex-settings/hooks.json")" "rerunning settings install keeps retired ledger hooks removed"
 check "1" "$(jq '[.hooks.UserPromptSubmit[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" codex-context"))] | length' "$W/codex-settings/hooks.json")" "rerunning settings install does not duplicate Codex prompt hooks"
+check "1" "$(jq '[.hooks.SessionStart[] | .hooks[] | select(.command | contains("session_start_persona_pick.sh"))] | length' "$W/codex-settings/hooks.json")" "Codex installs the persona pick hook once"
 check "1" "$(jq '[.hooks.PostToolUse[] | .hooks[] | select(.command | contains("session_ledger.sh") and endswith(" post"))] | length' "$W/codex-settings/hooks.json")" "rerunning settings install does not duplicate Codex post-hooks"
 
 mkdir -p "$W/codex-invalid"

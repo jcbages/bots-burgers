@@ -23,7 +23,7 @@
 #       --no-codex         Do not touch Codex.
 #       --only LIST        Comma-separated components to install (default: all).
 #                          Valid: instructions, commands, skills, agents, settings, codex.
-#                          ('settings' wires Claude settings and Codex ledger hooks.)
+#                          ('settings' wires Claude settings and Codex hooks.)
 #   -y, --yes              Assume defaults, do not prompt.
 #   -h, --help             Show this help.
 #
@@ -185,6 +185,7 @@ merge_hooks() {
     done | jq -Rsc 'split("\n") | map(select(length > 0))')"
   if [ "$host" = claude ]; then
     commands="$(jq -n \
+      --arg persona "$(shell_quote "$REPO_DIR/hooks/session_start_persona_pick.sh")" \
       --arg domain "$(shell_quote "$REPO_DIR/hooks/session_start_domain_map.sh")" \
       --arg branch "$(shell_quote "$REPO_DIR/hooks/block_branch_creation.sh")" \
       --arg scoped "$(shell_quote "$REPO_DIR/hooks/require_scoped_commit.sh")" \
@@ -192,14 +193,16 @@ merge_hooks() {
       --arg kamal "$(shell_quote "$REPO_DIR/hooks/block_kamal_mutations.sh")" \
       --arg lint "$(shell_quote "$REPO_DIR/hooks/ast_grep_scan.sh")" \
       --arg ledger "$(shell_quote "$REPO_DIR/hooks/session_ledger.sh")" \
-      '{SessionStart:[{hooks:[{type:"command",command:$domain}]}],
+      '{SessionStart:[{hooks:[{type:"command",command:$persona},{type:"command",command:$domain}]}],
         PreToolUse:[{matcher:"Bash",hooks:([$branch,$scoped,$discard,$kamal] | map({type:"command",command:.}))},
           {matcher:"Edit|Write",hooks:[{type:"command",command:($ledger + " pre")}]}],
         PostToolUse:[{matcher:"Edit|Write",hooks:[{type:"command",command:$lint}]},
           {matcher:"Edit|Write",hooks:[{type:"command",command:($ledger + " post")}]}]}')"
   else
     commands="$(jq -n --arg ledger "$(shell_quote "$REPO_DIR/hooks/session_ledger.sh")" \
-      '{UserPromptSubmit:[{hooks:[{type:"command",command:($ledger + " codex-context")}]}],
+      --arg persona "$(shell_quote "$REPO_DIR/hooks/session_start_persona_pick.sh")" \
+      '{SessionStart:[{hooks:[{type:"command",command:$persona}]}],
+        UserPromptSubmit:[{hooks:[{type:"command",command:($ledger + " codex-context")}]}],
         PreToolUse:[{matcher:"apply_patch",hooks:[{type:"command",command:($ledger + " codex-pre")}]}],
         PostToolUse:[{matcher:"apply_patch",hooks:[{type:"command",command:($ledger + " post")}]}]}')"
   fi
@@ -267,7 +270,7 @@ if [ "$NEED_CODEX" = 1 ]; then
   echo "  note    Codex config.toml left untouched"
   if want settings; then
     merge_codex_hooks "$CODEX_DIR" || exit 1
-    echo "  note    Session ledger hooks are merged into hooks.json"
+    echo "  note    Persona and session ledger hooks are merged into hooks.json"
   fi
 fi
 
